@@ -1,10 +1,5 @@
-.gitignore
-LICENSE
 README.md
-pyproject.toml
 setup.py
-.github/workflows/release-pypi.yml
-.github/workflows/release-testpypi.yml
 resources/contested_possession.gif
 resources/dribbling.gif
 resources/gotoball.gif
@@ -73,6 +68,7 @@ rsoccer_gym/vss/env_gk/__init__.py
 rsoccer_gym/vss/env_gk/vss_gk.py
 rsoccer_gym/vss/env_gk/attacker/models.py
 rsoccer_gym/vss/env_ma/__init__.py
+rsoccer_gym/vss/env_ma/vss_gym_ma - backup.py
 rsoccer_gym/vss/env_ma/vss_gym_ma.py
 rsoccer_gym/vss/env_ma/opponent/model.py
 rsoccer_gym/vss/env_vss/__init__.py
