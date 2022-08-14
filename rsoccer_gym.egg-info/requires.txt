@@ -1,0 +1,4 @@
+gym==0.21.0
+rc-robosim>=1.2.0
+pyglet
+protobuf

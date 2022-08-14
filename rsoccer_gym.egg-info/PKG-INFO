@@ -1,0 +1,6 @@
+Metadata-Version: 2.1
+Name: rsoccer-gym
+Version: 1.5.dev2+ga71e1b5.d20220531
+Summary: SSL and VSS robot soccer gym environments
+Home-page: https://github.com/robocin/rSoccer
+License-File: LICENSE
