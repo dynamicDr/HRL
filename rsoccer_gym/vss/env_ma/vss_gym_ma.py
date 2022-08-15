@@ -3,7 +3,6 @@ import math
 import os
 import pickle
 import random
-import warnings
 from typing import Dict
 
 import gym
@@ -11,11 +10,10 @@ import numpy as np
 import torch
 
 from matd3 import MATD3
-from networks import Actor
 from rsoccer_gym.Entities import Frame, Robot, Ball
+from rsoccer_gym.Utils import KDTree
 from rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
 from rsoccer_gym.vss.vss_gym_base import VSSBaseEnv
-from rsoccer_gym.Utils import KDTree
 
 
 class VSSMAEnv(VSSBaseEnv):

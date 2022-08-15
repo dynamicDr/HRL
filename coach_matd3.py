@@ -1,15 +1,15 @@
+import copy
 import os.path
-import pickle
 
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import copy
-from networks import Actor,Critic_MATD3
+
+from networks import Actor, Critic_MATD3
 
 
 class Coach_MATD3(object):
-    def __init__(self, args, agent_id,writer):
+    def __init__(self, args, agent_id, writer):
         self.agent_id = agent_id
         self.max_action = args.coach_max_action
         self.action_dim = args.coach_action_dim
@@ -23,14 +23,15 @@ class Coach_MATD3(object):
         self.policy_update_freq = args.goal_update_freq
         self.actor_pointer = 0
         # Create an individual actor and critic for each agent according to the 'agent_id'
-        self.actor = Actor(args,-1,True)
-        self.critic = Critic_MATD3(args,True)
+        self.actor = Actor(args, -1, True)
+        self.critic = Critic_MATD3(args, True)
         self.actor_target = copy.deepcopy(self.actor)
         self.critic_target = copy.deepcopy(self.critic)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.lr_a)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.lr_c)
-        self.writer=writer
+        self.writer = writer
+
     # Each agent selects actions based on its own local observations(add noise for exploration)
     def choose_action(self, obs, noise_std):
         obs = torch.unsqueeze(torch.tensor(obs, dtype=torch.float), 0)
@@ -90,4 +91,6 @@ class Coach_MATD3(object):
     def save_model(self, env_name, algorithm, number, total_steps, agent_id):
         if not os.path.exists("./model/{}".format(env_name)):
             os.mkdir("./model/{}".format(env_name))
-        torch.save(self.actor.state_dict(), "./model/{}/{}_actor_number_{}_step_{}k_coach.pth".format(env_name, algorithm, number, int(total_steps / 1000), agent_id))
+        torch.save(self.actor.state_dict(),
+                   "./model/{}/{}_actor_number_{}_step_{}k_coach.pth".format(env_name, algorithm, number,
+                                                                             int(total_steps / 1000), agent_id))

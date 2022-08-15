@@ -1,16 +1,9 @@
-import os.path
-import pickle
-
-import torch
-import torch.nn.functional as F
 import numpy as np
-import copy
-
-from mmoe import MMOE
-from networks import Actor, Critic_MATD3
-from replay_buffer import CoachReplayBuffer
 import torch
 import torch.nn as nn
+from networks.mmoe import MMOE
+from replay_buffer import CoachReplayBuffer
+
 
 class Coach_MMOE(object):
     def __init__(self, args, writer):
@@ -42,10 +35,10 @@ class Coach_MMOE(object):
         # print(f"top2:{top_2}=[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
         return np.array([[top_1_x_pos, top_1_y_pos], [top_2_x_pos, top_2_y_pos]])
 
-    def train(self, replay_buffer:CoachReplayBuffer,step):
+    def train(self, replay_buffer: CoachReplayBuffer, step):
         self.mmoe_net.train()
-        batch_obs_n, batch_tag_n=replay_buffer.sample()
-        batch_size=replay_buffer.batch_size
+        batch_obs_n, batch_tag_n = replay_buffer.sample()
+        batch_size = replay_buffer.batch_size
         predict = self.mmoe_net(batch_obs_n)
         one_index = []
         for i in range(batch_size):
@@ -58,11 +51,11 @@ class Coach_MMOE(object):
         self.writer.add_scalar('MMOE loss', loss, global_step=step)
 
     def load_model(self, model_path):
-        self.mmoe_net = torch.load(model_path)
+        # self.mmoe_net = torch.load(model_path)
         print(f"Successfully load mmoe model. model_path:{model_path}")
 
     def save_model(self, number, total_steps):
-        torch.save(self.mmoe_net,f"{self.save_path}model_num_{number}_{int(total_steps/1000)}k")
+        torch.save(self.mmoe_net, f"{self.save_path}moe_num_{number}_{int(total_steps / 1000)}k")
 
 
 if __name__ == '__main__':

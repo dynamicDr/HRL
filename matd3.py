@@ -1,11 +1,10 @@
 import os.path
-import pickle
 
 import torch
 import torch.nn.functional as F
 import numpy as np
 import copy
-from networks import Actor,Critic_MATD3
+from networks.actor_critic import Actor,Critic_MATD3
 
 
 class MATD3(object):
@@ -95,4 +94,4 @@ class MATD3(object):
     def save_model(self, env_name, number, total_steps, agent_id):
         if not os.path.exists("./model/{}".format(env_name)):
             os.mkdir("./model/{}".format(env_name))
-        torch.save(self.actor.state_dict(), "./model/{}/actor_number_{}_step_{}k_agent_{}.pth".format(env_name, number, int(total_steps / 1000), agent_id))
+        torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(env_name, number, int(total_steps / 1000), agent_id))
