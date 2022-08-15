@@ -52,11 +52,9 @@ class Runner:
             self.noise_std = 0
         else:
             self.noise_std = self.args.noise_std_init  # Initialize noise_std
-        self.timer = Timer()
 
     def run(self):
         while self.episode < self.args.max_episode:
-            self.timer.start_timer("init episode")
             # For each episode..
             obs = self.env.reset()
             coach_obs = obs[-1]
@@ -72,7 +70,6 @@ class Runner:
             agent_obs_n = self.env.observation[:-1]
             while not (done or terminate):
                 # For each step...
-                self.timer.start_timer("env.step")
                 a_n = [agent.choose_action(obs, noise_std=self.noise_std) for agent, obs in
                        zip(self.agent_n, agent_obs_n)]
                 obs_next, r_n, done, info = self.env.step(copy.deepcopy(a_n))
@@ -83,7 +80,7 @@ class Runner:
                 if self.args.record_reward:
                     self.env.write_log(self.writer, self.total_steps)
                 agent_obs_next_n = obs_next[:-1]
-                self.timer.start_timer("store to buffer")
+
                 # Store the transition
                 self.replay_buffer.store_transition(agent_obs_n, a_n, agent_r_n, agent_obs_next_n, done)
                 obs = obs_next
@@ -97,7 +94,7 @@ class Runner:
                 # Decay noise_std
                 if self.args.use_noise_decay:
                     self.noise_std = self.noise_std - self.args.noise_std_decay if self.noise_std - self.args.noise_std_decay > self.args.noise_std_min else self.args.noise_std_min
-                self.timer.start_timer("train agents")
+
                 if self.replay_buffer.current_size > self.args.batch_size and not self.args.display:
                     # Train each agent individually
                     for agent_id in range(self.args.N):
@@ -106,7 +103,6 @@ class Runner:
                 if episode_step >= self.args.episode_limit:
                     terminate = True
 
-                self.timer.start_timer("update goal")
                 # Update the goal
                 if goal_step == self.args.goal_update_freq or (terminate or done):
                     self.coach_replay_buffer.store_transition(goal_init_obs, coach_obs)
@@ -120,18 +116,15 @@ class Runner:
                         self.goal_count += 1
             self.episode += 1
 
-            self.timer.start_timer("train coach")
             if self.coach_replay_buffer.current_size > self.args.coach_batch_size and not self.args.display:
                 # Train coach
                 self.coach.train(self.coach_replay_buffer, self.total_steps)
 
-            self.timer.start_timer("save model")
             # Save model and TODO:update opponent
             if self.episode % self.args.save_rate == 0 and not self.args.display:
                 for i in range(args.N):
                     self.agent_n[i].save_model(env_name, number, self.total_steps, i)
                 self.coach.save_model(number, self.total_steps)
-            self.timer.start_timer("write log")
 
             avg_train_reward = episode_reward / episode_step
             print("============epi={},step={},avg_reward={},goal_score={}==============".format(self.episode,
@@ -141,8 +134,6 @@ class Runner:
             if not self.args.display:
                 self.writer.add_scalar('Agent rewards for each episode', avg_train_reward, global_step=self.episode)
                 self.writer.add_scalar('Goal', info["goal_score"], global_step=self.episode)
-            self.timer.end_timer()
-            self.timer.print_result()
         self.env.close()
 
 
@@ -189,7 +180,7 @@ if __name__ == '__main__':
     parser.add_argument("--goal_update_freq", type=int, default=10, help="The frequency of coach giving a new goal")
     parser.add_argument("--lr_mmoe", type=float, default=1e-4, help="Learning rate of mmoe")
     parser.add_argument("--coach_buffer_size", type=int, default=int(1e5), help="The capacity of the replay buffer")
-    parser.add_argument("--coach_batch_size", type=int, default=128, help="Batch size")
+    parser.add_argument("--coach_batch_size", type=int, default=256, help="Batch size")
     parser.add_argument("--mmoe_model_load_path", type=str,
                         default="./models/coach/model_mmoe_100_10step")
     parser.add_argument("--mmoe_model_save_path", type=str,
@@ -199,7 +190,7 @@ if __name__ == '__main__':
 
     env_name = "VSSMA-v0"
     seed = 0
-    number = 3
+    number = 4
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
     if args.restore:
@@ -208,11 +199,5 @@ if __name__ == '__main__':
         print("Loading...")
         for i in range(len(runner.agent_n)):
             runner.agent_n[i].actor.load_state_dict(torch.load(args.restore_model_dir.format(i)))
-        # try:
-        #     with open('./runner/{}_env_{}_number_{}.pkl'.format(args.algorithm, env_name, number), 'rb') as f:
-        #         runner.total_steps, runner.episode, runner.noise_std, runner.evaluate_rewards, runner.replay_buffer = pickle.load(
-        #             f)
-        # except:
-        #     pass
-    print("start runner.run()")
+    print("Start runner.run()")
     runner.run()

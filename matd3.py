@@ -60,8 +60,6 @@ class MATD3(object):
         # Compute current_Q
         current_Q1, current_Q2 = self.critic(batch_obs_n, batch_a_n)  # shape:(batch_size,1)
         critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
-        # self.writer.add_scalar('critic_loss_agent_{}'.format(self.agent_id), critic_loss,
-        #                        global_step=self.actor_pointer)
 
         # Optimize the critic
         self.critic_optimizer.zero_grad()
@@ -75,8 +73,7 @@ class MATD3(object):
             # Reselect the actions of the agent corresponding to 'agent_id', the actions of other agents remain unchanged
             batch_a_n[self.agent_id] = self.actor(batch_obs_n[self.agent_id])
             actor_loss = -self.critic.Q1(batch_obs_n, batch_a_n).mean()  # Only use Q1
-            # self.writer.add_scalar('actor_loss_agent_{}'.format(self.agent_id), actor_loss,
-            #                        global_step=self.actor_pointer)
+
             # Optimize the actor
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
@@ -92,6 +89,4 @@ class MATD3(object):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
     def save_model(self, env_name, number, total_steps, agent_id):
-        if not os.path.exists("./model/{}".format(env_name)):
-            os.mkdir("./model/{}".format(env_name))
         torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(env_name, number, int(total_steps / 1000), agent_id))
