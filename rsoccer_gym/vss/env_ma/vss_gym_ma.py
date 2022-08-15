@@ -466,15 +466,15 @@ class VSSMAOpp(VSSMAEnv):
             device = torch.device('cpu')
             for i in range(self.n_robots_yellow):
                 ckp_path = os.path.dirname(os.path.realpath(__file__)) \
-                           + f'/opponent/opp_{i}.pth'
+                           + f'/../../../models/opponent/opp_{i}.pth'
                 agent = MATD3(self.args, i, None)
                 state_dict = torch.load(ckp_path)
                 agent.actor.load_state_dict(state_dict)
                 agent.actor.eval()
                 self.opps.append(agent)
-                print(f"Successfully load opponents. ckp_path:{ckp_path}")
+                print(f"Successfully load opponents. model_path:{ckp_path}")
         except FileNotFoundError:
-            print("No ckp found. Will use random opponents.")
+            print("Warning: No model found. Will use random opponents.")
 
     def _opp_obs(self):
         observation = []
@@ -538,113 +538,11 @@ class VSSMAOpp(VSSMAEnv):
             if len(self.opps) != 0:
                 a = self.opps[i].choose_action(opp_obs[i], noise_std=0)
                 opp_action = copy.deepcopy(a)
-                # print(opp_action)
             else:
-                # print("ou_action")
                 opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
             v_wheel1, v_wheel0 = self._actions_to_v_wheels(opp_action)
             commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
                                   v_wheel1=v_wheel1))
-
-        return commands
-
-
-class VSSMASelfplay(VSSMAEnv):
-
-    def __init__(self, n_robots_control=3):
-        super().__init__(n_robots_control=n_robots_control)
-        self.args = None
-        self.opps = []
-        self.load_opp()
-
-    def load_opp(self):
-        self.opps = []
-        try:
-            with open(os.path.dirname(os.path.realpath(__file__)) + f'/opponent/args.pkl', 'rb') as f:
-                self.args = pickle.load(f)
-            device = torch.device('cpu')
-            for i in range(self.n_robots_yellow):
-                ckp_path = os.path.dirname(os.path.realpath(__file__)) \
-                           + f'/opponent/opp_{i}.pth'
-                agent = MATD3(self.args, i, None)
-                state_dict = torch.load(ckp_path)
-                agent.actor.load_state_dict(state_dict)
-                agent.actor.eval()
-                self.opps.append(agent)
-                print(f"Successfully load opponents. ckp_path:{ckp_path}")
-        except FileNotFoundError:
-            print("No ckp found. Will use random opponents.")
-
-    def _opp_obs(self):
-        observation = []
-        observation.append(self.norm_pos(-self.frame.ball.x))
-        observation.append(self.norm_pos(self.frame.ball.y))
-        observation.append(self.norm_v(-self.frame.ball.v_x))
-        observation.append(self.norm_v(self.frame.ball.v_y))
-
-        #  we reflect the side that the opp is attacking,
-        #  so that he will attack towards the goal where the goalkeeper is
-        for i in range(self.n_robots_yellow):
-            observation.append(self.norm_pos(-self.frame.robots_yellow[i].x))
-            observation.append(self.norm_pos(self.frame.robots_yellow[i].y))
-
-            observation.append(
-                np.sin(np.deg2rad(self.frame.robots_yellow[i].theta))
-            )
-            observation.append(
-                -np.cos(np.deg2rad(self.frame.robots_yellow[i].theta))
-            )
-            observation.append(self.norm_v(-self.frame.robots_yellow[i].v_x))
-            observation.append(self.norm_v(self.frame.robots_yellow[i].v_y))
-
-            observation.append(self.norm_w(-self.frame.robots_yellow[i].v_theta))
-
-        for i in range(self.n_robots_blue):
-            observation.append(self.norm_pos(-self.frame.robots_blue[i].x))
-            observation.append(self.norm_pos(self.frame.robots_blue[i].y))
-            observation.append(self.norm_v(-self.frame.robots_blue[i].v_x))
-            observation.append(self.norm_v(self.frame.robots_blue[i].v_y))
-            observation.append(self.norm_w(-self.frame.robots_blue[i].v_theta))
-
-        # get rotated
-        observations = []
-        observations.append(observation)
-        player_0 = copy.deepcopy(observation[4 + (7 * 0): 11 + (7 * 0)])
-        player_1 = copy.deepcopy(observation[4 + (7 * 1): 11 + (7 * 1)])
-        player_2 = copy.deepcopy(observation[4 + (7 * 2): 11 + (7 * 2)])
-        observation_1 = copy.deepcopy(observation)
-        observation_1[4 + (7 * 0): 11 + (7 * 0)] = player_1
-        observation_1[4 + (7 * 1): 11 + (7 * 1)] = player_0
-        observations.append(observation_1)
-        observation_2 = copy.deepcopy(observation)
-        observation_2[4 + (7 * 0): 11 + (7 * 0)] = player_2
-        observation_2[4 + (7 * 2): 11 + (7 * 2)] = player_0
-        observations.append(observation_2)
-        return np.array(observations, dtype=np.float32)
-
-    def _get_commands(self, actions):
-        commands = []
-        self.actions = {}
-
-        for i in range(self.n_robots_blue):
-            self.actions[i] = actions[i]
-            v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
-            commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
-                                  v_wheel1=v_wheel1))
-        opp_obs = self._opp_obs()
-
-        for i in range(self.n_robots_yellow):
-            if len(self.opps) != 0:
-                a = self.opps[i].choose_action(opp_obs[i], noise_std=0)
-                opp_action = copy.deepcopy(a)
-                # print(opp_action)
-            else:
-                # print("ou_action")
-                opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
-            v_wheel1, v_wheel0 = self._actions_to_v_wheels(opp_action)
-            commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
-                                  v_wheel1=v_wheel1))
-
         return commands
 
 
