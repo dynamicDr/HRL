@@ -18,6 +18,8 @@ TAG_RED =       (151 /255, 21  /255, 0   /255)
 TAG_PURPLE =    (102 /255, 51  /255, 153 /255)
 TAG_PINK =      (220 /255, 0   /255, 220 /255)
 
+GOAL_WHITE =    (225 /255, 225 /255, 225 /255)
+
 class RCGymRender:
     '''
     Rendering Class to RoboSim Simulator, based on gym classic control rendering
@@ -57,6 +59,7 @@ class RCGymRender:
         self.ball: rendering.Transform = None
         self.blue_robots: List[rendering.Transform] = []
         self.yellow_robots: List[rendering.Transform] = []
+        self.blue_robots_goal: List[rendering.Transform] = []
 
         # Window dimensions in pixels
         screen_width = width
@@ -131,6 +134,10 @@ class RCGymRender:
         for i, yellow in enumerate(frame.robots_yellow.values()):
             self.yellow_robots[i].set_translation(yellow.x, yellow.y)
             self.yellow_robots[i].set_rotation(np.deg2rad(yellow.theta))
+
+        for i, blue_goal in enumerate(frame.robots_blue_goal.values()):
+            self.blue_robots_goal[i].set_translation(blue_goal.x, blue_goal.y)
+            self.blue_robots_goal[i].set_rotation(np.deg2rad(blue_goal.theta))
 
         return self.screen.render(return_rgb_array=return_rgb_array)
 
@@ -260,11 +267,22 @@ class RCGymRender:
             1 : TAG_PURPLE,
             2 : TAG_RED
         }
+        goal_id_colors: Dict[int, Tuple[float, float, float]] = {
+            0 : TAG_RED,
+            1 : TAG_YELLOW,
+            2 : TAG_GREEN
+        }
         
         # Add blue robots
         for id in range(self.n_robots_blue):
             self.blue_robots.append(
                 self._add_vss_robot(team_color=TAG_BLUE, id_color=tag_id_colors[id])
+            )
+
+        # Add blue robots goal
+        for id in range(2):
+            self.blue_robots_goal.append(
+                self._add_vss_robot(team_color=GOAL_WHITE, id_color=goal_id_colors[id])
             )
             
         # Add yellow robots

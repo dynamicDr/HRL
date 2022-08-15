@@ -111,6 +111,15 @@ class VSSMAEnv(VSSBaseEnv):
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
+
+        for i in range(2):
+            robot = Robot()
+            robot.id = i
+            robot.x = self.goal[i][0]
+            robot.y = self.goal[i][1]
+            robot.theta = 0
+            self.frame.robots_blue_goal[robot.id] = robot
+
         if self.first_step:
             self.first_step = False
         return observation, reward, done, self.reward_shaping_total

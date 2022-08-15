@@ -1,14 +1,13 @@
 import argparse
 import copy
-import os
 import re
-import webbrowser
 
 import gym
 import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from Timer import Timer
 from coach_mmoe import Coach_MMOE
 from matd3 import MATD3
 from replay_buffer import ReplayBuffer, CoachReplayBuffer
@@ -22,7 +21,7 @@ class Runner:
         self.number = number
         self.seed = seed
         # Create env
-        self.env:VSSMAEnv = gym.make(self.env_name)
+        self.env: VSSMAEnv = gym.make(self.env_name)
         self.args.N = 3  # The number of agents
         self.args.obs_dim_n = [self.env.observation_space.shape[1] for i in range(self.args.N)]  # 46
         self.args.action_dim_n = [self.env.action_space.shape[1] for i in range(self.args.N)]
@@ -53,9 +52,11 @@ class Runner:
             self.noise_std = 0
         else:
             self.noise_std = self.args.noise_std_init  # Initialize noise_std
+        self.timer = Timer()
 
     def run(self):
         while self.episode < self.args.max_episode:
+            self.timer.start_timer("init episode")
             # For each episode..
             obs = self.env.reset()
             coach_obs = obs[-1]
@@ -71,6 +72,7 @@ class Runner:
             agent_obs_n = self.env.observation[:-1]
             while not (done or terminate):
                 # For each step...
+                self.timer.start_timer("env.step")
                 a_n = [agent.choose_action(obs, noise_std=self.noise_std) for agent, obs in
                        zip(self.agent_n, agent_obs_n)]
                 obs_next, r_n, done, info = self.env.step(copy.deepcopy(a_n))
@@ -81,6 +83,7 @@ class Runner:
                 if self.args.record_reward:
                     self.env.write_log(self.writer, self.total_steps)
                 agent_obs_next_n = obs_next[:-1]
+                self.timer.start_timer("store to buffer")
                 # Store the transition
                 self.replay_buffer.store_transition(agent_obs_n, a_n, agent_r_n, agent_obs_next_n, done)
                 obs = obs_next
@@ -94,7 +97,7 @@ class Runner:
                 # Decay noise_std
                 if self.args.use_noise_decay:
                     self.noise_std = self.noise_std - self.args.noise_std_decay if self.noise_std - self.args.noise_std_decay > self.args.noise_std_min else self.args.noise_std_min
-
+                self.timer.start_timer("train agents")
                 if self.replay_buffer.current_size > self.args.batch_size and not self.args.display:
                     # Train each agent individually
                     for agent_id in range(self.args.N):
@@ -103,6 +106,7 @@ class Runner:
                 if episode_step >= self.args.episode_limit:
                     terminate = True
 
+                self.timer.start_timer("update goal")
                 # Update the goal
                 if goal_step == self.args.goal_update_freq or (terminate or done):
                     self.coach_replay_buffer.store_transition(goal_init_obs, coach_obs)
@@ -116,23 +120,29 @@ class Runner:
                         self.goal_count += 1
             self.episode += 1
 
+            self.timer.start_timer("train coach")
             if self.coach_replay_buffer.current_size > self.args.coach_batch_size and not self.args.display:
                 # Train coach
                 self.coach.train(self.coach_replay_buffer, self.total_steps)
 
+            self.timer.start_timer("save model")
             # Save model and TODO:update opponent
             if self.episode % self.args.save_rate == 0 and not self.args.display:
                 for i in range(args.N):
                     self.agent_n[i].save_model(env_name, number, self.total_steps, i)
                 self.coach.save_model(number, self.total_steps)
+            self.timer.start_timer("write log")
 
             avg_train_reward = episode_reward / episode_step
             print("============epi={},step={},avg_reward={},goal_score={}==============".format(self.episode,
-                                                                                             self.total_steps,
-                                                                                             avg_train_reward,info["goal_score"]))
+                                                                                                self.total_steps,
+                                                                                                avg_train_reward,
+                                                                                                info["goal_score"]))
             if not self.args.display:
                 self.writer.add_scalar('Agent rewards for each episode', avg_train_reward, global_step=self.episode)
                 self.writer.add_scalar('Goal', info["goal_score"], global_step=self.episode)
+            self.timer.end_timer()
+            self.timer.print_result()
         self.env.close()
 
 
@@ -160,7 +170,7 @@ if __name__ == '__main__':
     parser.add_argument("--tau", type=float, default=0.01, help="Softly update the target network")
     parser.add_argument("--use_orthogonal_init", type=bool, default=True, help="Orthogonal initialization")
     parser.add_argument("--use_grad_clip", type=bool, default=True, help="Gradient clip")
-    parser.add_argument("--save_rate", type=int, default=500,
+    parser.add_argument("--save_rate", type=int, default=200,
                         help="Model save per n episode")
     parser.add_argument("--record_reward", type=bool, default=True, help="Record detailed reward to tensorboard")
     # --------------------------------------MATD3--------------------------------------------------------------------
@@ -176,12 +186,12 @@ if __name__ == '__main__':
     parser.add_argument("--coach_hidden_dim", type=int, default=64,
                         help="The number of neurons in hidden layers of the neural network")
     parser.add_argument("--coach_max_action", type=float, default=1.2, help="Max action")
-    parser.add_argument("--goal_update_freq", type=int, default=30, help="The frequency of coach giving a new goal")
+    parser.add_argument("--goal_update_freq", type=int, default=10, help="The frequency of coach giving a new goal")
     parser.add_argument("--lr_mmoe", type=float, default=1e-4, help="Learning rate of mmoe")
     parser.add_argument("--coach_buffer_size", type=int, default=int(1e5), help="The capacity of the replay buffer")
     parser.add_argument("--coach_batch_size", type=int, default=128, help="Batch size")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/model_mmoe_100")
+                        default="./models/coach/model_mmoe_100_10step")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
     args = parser.parse_args()
@@ -189,7 +199,7 @@ if __name__ == '__main__':
 
     env_name = "VSSMA-v0"
     seed = 0
-    number = 1
+    number = 3
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
     if args.restore:
