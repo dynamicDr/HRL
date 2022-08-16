@@ -89,4 +89,4 @@ class MATD3(object):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
     def save_model(self, env_name, number, total_steps, agent_id):
-        torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(env_name, number, int(total_steps / 1000), agent_id))
+        torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(number, int(total_steps / 1000), agent_id))
