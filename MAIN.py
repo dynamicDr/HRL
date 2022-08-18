@@ -77,7 +77,7 @@ class Runner:
                 agent_r_n = reward_list
                 if self.args.display:
                     self.env.render()
-                if self.args.record_reward:
+                if self.args.record_reward and not self.args.display:
                     self.env.write_log(self.writer, self.total_steps)
                 agent_obs_next_n = obs_next[:-1]
 
@@ -116,7 +116,7 @@ class Runner:
                         self.goal_count += 1
             self.episode += 1
 
-            if self.coach_replay_buffer.current_size > self.args.coach_batch_size and not self.args.display:
+            if self.coach_replay_buffer.current_size >= self.args.coach_batch_size and not self.args.display:
                 # Train coach
                 self.coach.train(self.coach_replay_buffer, self.total_steps)
 
@@ -168,21 +168,21 @@ if __name__ == '__main__':
     parser.add_argument("--policy_noise", type=float, default=0.2, help="Target policy smoothing")
     parser.add_argument("--noise_clip", type=float, default=0.5, help="Clip noise")
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
-    parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
+    parser.add_argument("--restore", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--restore_model_dir", type=str,
-                        default="./models/agent/actor_number_0_step_272k_agent_{}.pth",
+                        default="./models/agent/actor_number_6_1079k_agent_{}.pth",
                         help="Restore from checkpoint")
-    parser.add_argument("--display", type=bool, default=False, help="Display mode")
+    parser.add_argument("--display", type=bool, default=True, help="Display mode")
     # ------------------------------------- HRL-------------------------------------------------------------------
     parser.add_argument("--coach_hidden_dim", type=int, default=64,
                         help="The number of neurons in hidden layers of the neural network")
     parser.add_argument("--coach_max_action", type=float, default=1.2, help="Max action")
     parser.add_argument("--goal_update_freq", type=int, default=10, help="The frequency of coach giving a new goal")
     parser.add_argument("--lr_mmoe", type=float, default=1e-4, help="Learning rate of mmoe")
-    parser.add_argument("--coach_buffer_size", type=int, default=int(1e5), help="The capacity of the replay buffer")
-    parser.add_argument("--coach_batch_size", type=int, default=256, help="Batch size")
+    parser.add_argument("--coach_buffer_size", type=int, default=int(3e3), help="The capacity of the replay buffer")
+    parser.add_argument("--coach_batch_size", type=int, default=1024, help="Batch size")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/model_mmoe_100_10step")
+                        default="./models/coach/moe_num_6_1079k")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
     args = parser.parse_args()
@@ -190,7 +190,7 @@ if __name__ == '__main__':
 
     env_name = "VSSMA-v0"
     seed = 0
-    number = 4
+    number = 6
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
     if args.restore:

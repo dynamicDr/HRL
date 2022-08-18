@@ -239,8 +239,8 @@ class VSSMAEnv(VSSBaseEnv):
         w_move = 0.2  # [-5,5]
         w_ball_grad = 0.8  # [-5,5]
         w_energy = 2e-6
-        w_speed = 1  # 0 or -1
-        w_goal = 100
+        w_speed = 0.5  # 0 or -1
+        w_goal = 50
 
         if self.reward_shaping_total is None:
             self.reward_shaping_total = {'goal_score': 0, 'ball_grad': 0,
@@ -470,7 +470,7 @@ class VSSMAOpp(VSSMAEnv):
     def load_opp(self):
         self.opps = []
         try:
-            with open(os.path.dirname(os.path.realpath(__file__)) + f'/opponent/args.pkl', 'rb') as f:
+            with open("/../../../models/opponent/args.pkl", 'rb') as f:
                 self.args = pickle.load(f)
             device = torch.device('cpu')
             for i in range(self.n_robots_yellow):
