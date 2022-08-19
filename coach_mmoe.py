@@ -14,6 +14,9 @@ class Coach_MMOE(object):
         self.optimizer = torch.optim.Adam(self.mmoe_net.parameters(), lr=args.lr_mmoe)
         self.save_path = args.mmoe_model_save_path
 
+    def reset_lr(self,lr):
+        self.optimizer = torch.optim.Adam(self.mmoe_net.parameters(), lr=lr)
+
     def choose_action(self, obs):
         self.mmoe_net.eval()
         outs = self.mmoe_net(torch.from_numpy(np.array([obs])))
@@ -30,9 +33,8 @@ class Coach_MMOE(object):
 
         top_2_x_pos = -0.75 + 1.5 / 6 / 2 + top_2_x * 1.5 / 6
         top_2_y_pos = -0.65 + 1.3 / 6 / 2 + top_2_y * 1.3 / 6
-
-        print(f"top1:{top_1}=[{top_1_x},{top_1_y}]=[{top_1_x_pos},{top_1_y_pos}]")
-        print(f"top2:{top_2}=[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
+        # print(f"top1:{top_1}=[{top_1_x},{top_1_y}]=[{top_1_x_pos},{top_1_y_pos}]")
+        # print(f"top2:{top_2}=[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
         return np.array([[top_1_x_pos, top_1_y_pos], [top_2_x_pos, top_2_y_pos]])
 
     def train(self, replay_buffer: CoachReplayBuffer, step):
@@ -54,8 +56,11 @@ class Coach_MMOE(object):
         self.mmoe_net = torch.load(model_path)
         print(f"Successfully load mmoe model. model_path:{model_path}")
 
-    def save_model(self, number, total_steps):
-        torch.save(self.mmoe_net, f"{self.save_path}moe_num_{number}_{int(total_steps / 1000)}k")
+    def save_model(self, number, total_steps, online_training = False):
+        if online_training:
+            torch.save(self.mmoe_net, f"{self.save_path}online_trained_moe_num_{number}_{int(total_steps / 1000)}k")
+        else:
+            torch.save(self.mmoe_net, f"{self.save_path}moe_num_{number}_{int(total_steps / 1000)}k")
 
 if __name__ == '__main__':
     # a = [0.3949057, -0.67849123, 0.49404806, -0.8383228, -0.6695515, -0.5077701,

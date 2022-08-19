@@ -469,21 +469,19 @@ class VSSMAOpp(VSSMAEnv):
 
     def load_opp(self):
         self.opps = []
-        try:
-            with open("/../../../models/opponent/args.pkl", 'rb') as f:
-                self.args = pickle.load(f)
-            device = torch.device('cpu')
-            for i in range(self.n_robots_yellow):
-                ckp_path = os.path.dirname(os.path.realpath(__file__)) \
-                           + f'/../../../models/opponent/opp_{i}.pth'
-                agent = MATD3(self.args, i, None)
-                state_dict = torch.load(ckp_path)
-                agent.actor.load_state_dict(state_dict)
-                agent.actor.eval()
-                self.opps.append(agent)
-                print(f"Successfully load opponents. model_path:{ckp_path}")
-        except FileNotFoundError:
-            print("Warning: No model found. Will use random opponents.")
+
+        with open("/home/user/football/HRL/models/opponent/args.npy", 'rb') as f:
+            self.args = pickle.load(f)
+        for i in range(self.n_robots_yellow):
+            ckp_path = os.path.dirname(os.path.realpath(__file__)) \
+                       + f'/../../../models/opponent/opp_{i}.pth'
+            agent = MATD3(self.args, i, None)
+            state_dict = torch.load(ckp_path)
+            agent.actor.load_state_dict(state_dict)
+            agent.actor.eval()
+            self.opps.append(agent)
+            print(f"Successfully load opponents. model_path:{ckp_path}")
+
 
     def _opp_obs(self):
         observation = []

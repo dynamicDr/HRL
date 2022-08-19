@@ -1,5 +1,6 @@
 import argparse
 import copy
+import pickle
 import re
 
 import gym
@@ -35,8 +36,10 @@ class Runner:
         torch.manual_seed(self.seed)
 
         # Create a tensorboard
-        self.writer = SummaryWriter(
-            log_dir='runs/{}/number_{}_seed_{}'.format(self.env_name, self.number, self.seed))
+        self.writer = None
+        if not self.args.display:
+            self.writer = SummaryWriter(
+                log_dir='runs/{}/number_{}_seed_{}'.format(self.env_name, self.number, self.seed))
         # Create N agents and coach
         self.agent_n = [MATD3(args, agent_id, self.writer) for agent_id in range(args.N)]
         self.coach = Coach_MMOE(args, self.writer)
@@ -124,7 +127,7 @@ class Runner:
             if self.episode % self.args.save_rate == 0 and not self.args.display:
                 for i in range(args.N):
                     self.agent_n[i].save_model(env_name, number, self.total_steps, i)
-                self.coach.save_model(number, self.total_steps)
+                self.coach.save_model(number, self.total_steps,online_training=True)
 
             avg_train_reward = episode_reward / episode_step
             print("============epi={},step={},avg_reward={},goal_score={}==============".format(self.episode,
@@ -168,11 +171,11 @@ if __name__ == '__main__':
     parser.add_argument("--policy_noise", type=float, default=0.2, help="Target policy smoothing")
     parser.add_argument("--noise_clip", type=float, default=0.5, help="Clip noise")
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
-    parser.add_argument("--restore", type=bool, default=True, help="Restore from checkpoint")
+    parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
     parser.add_argument("--restore_model_dir", type=str,
                         default="./models/agent/actor_number_6_1079k_agent_{}.pth",
                         help="Restore from checkpoint")
-    parser.add_argument("--display", type=bool, default=True, help="Display mode")
+    parser.add_argument("--display", type=bool, default=False, help="Display mode")
     # ------------------------------------- HRL-------------------------------------------------------------------
     parser.add_argument("--coach_hidden_dim", type=int, default=64,
                         help="The number of neurons in hidden layers of the neural network")
@@ -190,9 +193,14 @@ if __name__ == '__main__':
 
     env_name = "VSSMA-v0"
     seed = 0
-    number = 6
+    number = 7
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
+
+    # Save args
+    with open(f'./models/args/args_num{number}.pkl', 'wb') as f:
+        pickle.dump(runner.args, f)
+
     if args.restore:
         load_number = re.findall(r"number_(.+?)_", args.restore_model_dir)[0]
         assert load_number == str(number)
