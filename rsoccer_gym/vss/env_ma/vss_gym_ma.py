@@ -9,6 +9,7 @@ import gym
 import numpy as np
 import torch
 
+from coach_mmoe import Coach_MMOE
 from matd3 import MATD3
 from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.Utils import KDTree
@@ -126,8 +127,8 @@ class VSSMAEnv(VSSBaseEnv):
 
     def set_attacker_and_goal(self, goal):
         self.goal = goal
-        self.attacker = self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y])
-        self.defender_1 = self._get_closet_robot_idx(goal[0], except_idx=self.attacker)
+        self.attacker = self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y],"blue")
+        self.defender_1 = self._get_closet_robot_idx(goal[0],"blue", except_idx=self.attacker)
         for i in range(self.n_robots_control):
             if i != self.attacker and i != self.defender_1:
                 self.defender_2 = i
@@ -321,12 +322,18 @@ class VSSMAEnv(VSSBaseEnv):
             self.writer.add_scalar(f'Agent_{idx} Speed Penalty', self.individual_reward[f'robot_{idx}']['speed'], global_step=step_num)
 
 
-    def _get_closet_robot_idx(self, target, except_idx=None):
+    def _get_closet_robot_idx(self, target,team, except_idx=None):
         robots_distance_to_target = {}
         for idx in range(self.n_robots_control):
             target = np.array(target)
-            robot = np.array([self.frame.robots_blue[idx].x,
-                              self.frame.robots_blue[idx].y])
+            if team == "blue":
+                robot = np.array([self.frame.robots_blue[idx].x,
+                                  self.frame.robots_blue[idx].y])
+            elif team == "yellow":
+                robot = np.array([self.frame.robots_yellow[idx].x,
+                                  self.frame.robots_yellow[idx].y])
+            else:
+                Exception("team must be blue or yellow")
             robot_distance_to_target = np.sqrt(sum((robot - target) ** 2 for robot, target in zip(robot, target)))
             robots_distance_to_target[idx] = robot_distance_to_target
         sorted_list = sorted(robots_distance_to_target.items(), key=lambda kv: [kv[1], kv[0]])
@@ -465,16 +472,16 @@ class VSSMAOpp(VSSMAEnv):
         super().__init__(n_robots_control=n_robots_control)
         self.args = None
         self.opps = []
-        self.load_opp()
+        self.opp_path = "/home/user/football/HRL/models/opponent"
 
     def load_opp(self):
         self.opps = []
 
-        with open("/home/user/football/HRL/models/opponent/args.npy", 'rb') as f:
+        with open(f"{self.opp_path}/args.npy", 'rb') as f:
             self.args = pickle.load(f)
         for i in range(self.n_robots_yellow):
             ckp_path = os.path.dirname(os.path.realpath(__file__)) \
-                       + f'/../../../models/opponent/opp_{i}.pth'
+                       + f'{self.opp_path}/opp_{i}.pth'
             agent = MATD3(self.args, i, None)
             state_dict = torch.load(ckp_path)
             agent.actor.load_state_dict(state_dict)
@@ -551,6 +558,58 @@ class VSSMAOpp(VSSMAEnv):
             commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
                                   v_wheel1=v_wheel1))
         return commands
+
+
+class VSSMASelfplay(VSSMAOpp):
+
+    def __init__(self, n_robots_control=3):
+        super().__init__(n_robots_control=n_robots_control)
+        self.coach = None
+        self.opp_path = "/home/user/football/HRL/models/selfplay_opponent"
+        self.opp_goal = [[0, 0], [0, 0]]
+        self.opp_attacker = 0
+        self.opp_defender_1 = 1
+        self.opp_defender_2 = 2
+
+    def load_opp(self):
+        super().load_opp()
+        coach_path = f"{self.opp_path}/coach.pth"
+        self.coach.load_model(coach_path)
+
+    def _opp_obs(self):
+        raise NotImplementedError()
+
+    def set_opponent_attacker_and_goal(self, goal):
+        self.opp_goal = goal
+        self.opp_attacker = self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y],"yellow")
+        self.opp_defender_1 = self._get_closet_robot_idx(goal[0],"yellow", except_idx=self.attacker)
+        for i in range(self.n_robots_control):
+            if i != self.opp_attacker and i != self.opp_defender_1:
+                self.opp_defender_2 = i
+
+    def _get_commands(self, actions):
+        raise NotImplementedError()
+        commands = []
+        self.actions = {}
+
+        for i in range(self.n_robots_blue):
+            self.actions[i] = actions[i]
+            v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
+            commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
+                                  v_wheel1=v_wheel1))
+        opp_obs = self._opp_obs()
+
+        for i in range(self.n_robots_yellow):
+            if len(self.opps) != 0:
+                a = self.opps[i].choose_action(opp_obs[i], noise_std=0)
+                opp_action = copy.deepcopy(a)
+            else:
+                opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
+            v_wheel1, v_wheel0 = self._actions_to_v_wheels(opp_action)
+            commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
+                                  v_wheel1=v_wheel1))
+        return commands
+
 
 
 if __name__ == '__main__':

@@ -38,8 +38,8 @@ writer = SummaryWriter(
     log_dir='runs/match/match_num_{}_seed_{}'.format(number,seed))
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_6_3157k"
-agent_model_load_path =  "models/agent/actor_number_6_3157k_agent_{}.pth"
+mmoe_model_load_path = "models/coach/moe_num_6_3451k"
+agent_model_load_path =  "models/agent/actor_number_6_3451k_agent_{}.pth"
 args_load_path = "models/args/args_num6.pkl"
 with open(args_load_path, 'rb') as f:
     args = pickle.load(f)
@@ -50,6 +50,7 @@ if online_training:
     coach.reset_lr(online_training_lr)
 for i in range(args.N):
     agent_n[i].actor.load_state_dict(torch.load(agent_model_load_path.format(i)))
+env.load_opp()
 
 # Create replay buffer
 coach_replay_buffer = CoachReplayBuffer(args)
