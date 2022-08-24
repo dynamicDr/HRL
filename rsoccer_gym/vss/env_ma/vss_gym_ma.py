@@ -68,8 +68,6 @@ class VSSMAEnv(VSSBaseEnv):
     def __init__(self, n_robots_control=3):
         super().__init__(field_type=0, n_robots_blue=3, n_robots_yellow=3,
                          time_step=0.025)
-
-        self.first_step = True
         self.n_robots_control = n_robots_control
         self.action_space = gym.spaces.Box(low=-1,
                                            high=1,
@@ -88,15 +86,14 @@ class VSSMAEnv(VSSBaseEnv):
         self.observation = None
         self.ou_actions = []
         self.goal = [[0, 0], [0, 0]]
-        self.attacker = 0
+        self.attacker = [0]
         self.defender_1 = 1
         self.defender_2 = 2
-        self.writer=None
+        self.writer = None
         for i in range(self.n_robots_blue + self.n_robots_yellow):
             self.ou_actions.append(
                 OrnsteinUhlenbeckAction(self.action_space, dt=self.time_step)
             )
-
 
         print('Environment initialized')
 
@@ -107,12 +104,32 @@ class VSSMAEnv(VSSBaseEnv):
         self.individual_reward = {}
         for ou in self.ou_actions:
             ou.reset()
-        self.first_step = True
         return super().reset()
+
+    def reach_goal(self, robot_idx,  team,target):
+        target = np.array(target)
+        if team == "blue":
+            robot = np.array([self.frame.robots_blue[robot_idx].x,
+                              self.frame.robots_blue[robot_idx].y])
+        elif team == "yellow":
+            robot = np.array([self.frame.robots_yellow[robot_idx].x,
+                              self.frame.robots_yellow[robot_idx].y])
+        else:
+            Exception("team must be blue or yellow")
+        robot_distance_to_target = np.sqrt(sum((robot - target) ** 2 for robot, target in zip(robot, target)))
+
+        return robot_distance_to_target<0.1
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
-
+        if self.defender_1 not in self.attacker:
+            if self.reach_goal(self.defender_1, "blue",self.goal[0]):
+                self.attacker.append(self.defender_1)
+                print(self.attacker)
+        if self.defender_2 not in self.attacker:
+            if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
+                self.attacker.append(self.defender_2)
+                print(self.attacker)
         for i in range(2):
             robot = Robot()
             robot.id = i
@@ -120,20 +137,18 @@ class VSSMAEnv(VSSBaseEnv):
             robot.y = self.goal[i][1]
             robot.theta = 0
             self.frame.robots_blue_goal[robot.id] = robot
+        # print(f"{self.attacker},{self.defender_1},{self.defender_2}")
 
-        if self.first_step:
-            self.first_step = False
         return observation, reward, done, self.reward_shaping_total
 
     def set_attacker_and_goal(self, goal):
         self.goal = goal
-        self.attacker = self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y],"blue")
-        self.defender_1 = self._get_closet_robot_idx(goal[0],"blue", except_idx=self.attacker)
+        self.attacker = [self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y], "blue")]
+        self.defender_1 = self._get_closet_robot_idx(goal[0], "blue", except_idx=self.attacker[0])
         for i in range(self.n_robots_control):
-            if i != self.attacker and i != self.defender_1:
+            if i != self.attacker[0] and i != self.defender_1:
                 self.defender_2 = i
         self._frame_to_observations()
-        # print(f"{self.attacker},{self.defender_1},{self.defender_2}")
 
     def get_rotated_obs(self):
         robots_dict = dict()
@@ -186,7 +201,7 @@ class VSSMAEnv(VSSBaseEnv):
                     observation.append(self.norm_w(self.frame.robots_yellow[i].v_theta))
 
             # append goal and role
-            if idx == self.attacker:
+            if idx in self.attacker:
                 observation.append(self.norm_pos(self.frame.ball.x))
                 observation.append(self.norm_pos(self.frame.ball.y))
                 observation.append(0)
@@ -199,7 +214,7 @@ class VSSMAEnv(VSSBaseEnv):
                 observation.append(self.norm_pos(self.goal[1][1]))
                 observation.append(1)
             else:
-                raise Exception(f"idx{idx} is neither attacker nor defender")
+                raise Exception(f"idx{idx} is neither attacker nor defender: {self.attacker},{self.defender_1},{self.defender_2}")
             observations.append(np.array(observation, dtype=np.float32))
         # Append coach observation
         observations.append(np.array(observations[0][:40], dtype=np.float32))
@@ -274,7 +289,7 @@ class VSSMAEnv(VSSBaseEnv):
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
                     if w_move != 0:
-                        if idx == self.attacker:
+                        if idx in self.attacker:
                             move_target = [self.frame.ball.x, self.frame.ball.y]
                         elif idx == self.defender_1:
                             move_target = self.goal[0]
@@ -312,17 +327,21 @@ class VSSMAEnv(VSSBaseEnv):
                     self.individual_reward[f'robot_{idx}']['speed'] = w_speed * speed_penalty  # noqa
         return reward, done
 
-    def write_log(self,writer,step_num):
+    def write_log(self, writer, step_num):
         if self.writer is None:
             self.writer = writer
         self.writer.add_scalar(f'Ball Grad Reward', self.reward_shaping_total['ball_grad'], global_step=step_num)
         for idx in range(self.n_robots_control):
-            self.writer.add_scalar(f'Agent_{idx} Move Reward', self.individual_reward[f'robot_{idx}']['move'], global_step=step_num)
-            self.writer.add_scalar(f'Agent_{idx} Energy Penalty', self.individual_reward[f'robot_{idx}']['energy'], global_step=step_num)
-            self.writer.add_scalar(f'Agent_{idx} Speed Penalty', self.individual_reward[f'robot_{idx}']['speed'], global_step=step_num)
+            self.writer.add_scalar(f'Agent_{idx} Move Reward', self.individual_reward[f'robot_{idx}']['move'],
+                                   global_step=step_num)
+            self.writer.add_scalar(f'Agent_{idx} Energy Penalty', self.individual_reward[f'robot_{idx}']['energy'],
+                                   global_step=step_num)
+            self.writer.add_scalar(f'Agent_{idx} Speed Penalty', self.individual_reward[f'robot_{idx}']['speed'],
+                                   global_step=step_num)
 
 
-    def _get_closet_robot_idx(self, target,team, except_idx=None):
+
+    def _get_closet_robot_idx(self, target, team, except_idx=None):
         robots_distance_to_target = {}
         for idx in range(self.n_robots_control):
             target = np.array(target)
@@ -472,23 +491,21 @@ class VSSMAOpp(VSSMAEnv):
         super().__init__(n_robots_control=n_robots_control)
         self.args = None
         self.opps = []
-        self.opp_path = "/home/user/football/HRL/models/opponent"
+        self.opp_path = "/home/user/football/HRL/models/opponent/"
+        self.opp_obs = None
 
     def load_opp(self):
+        print("Load opponent...")
         self.opps = []
-
-        with open(f"{self.opp_path}/args.npy", 'rb') as f:
+        with open(f"{self.opp_path}args.npy", 'rb') as f:
             self.args = pickle.load(f)
         for i in range(self.n_robots_yellow):
-            ckp_path = os.path.dirname(os.path.realpath(__file__)) \
-                       + f'{self.opp_path}/opp_{i}.pth'
+            ckp_path = f"{self.opp_path}opp_{i}"
             agent = MATD3(self.args, i, None)
             state_dict = torch.load(ckp_path)
             agent.actor.load_state_dict(state_dict)
             agent.actor.eval()
             self.opps.append(agent)
-            print(f"Successfully load opponents. model_path:{ckp_path}")
-
 
     def _opp_obs(self):
         observation = []
@@ -535,7 +552,9 @@ class VSSMAOpp(VSSMAEnv):
         observation_2[4 + (7 * 0): 11 + (7 * 0)] = player_2
         observation_2[4 + (7 * 2): 11 + (7 * 2)] = player_0
         observations.append(observation_2)
-        return np.array(observations, dtype=np.float32)
+        observations = np.array(observations, dtype=np.float32)
+        self.opp_obs = observations
+        return observations
 
     def _get_commands(self, actions):
         commands = []
@@ -546,7 +565,7 @@ class VSSMAOpp(VSSMAEnv):
             v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
             commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
                                   v_wheel1=v_wheel1))
-        opp_obs = self._opp_obs()
+        opp_obs = self.opp_obs
 
         for i in range(self.n_robots_yellow):
             if len(self.opps) != 0:
@@ -564,53 +583,111 @@ class VSSMASelfplay(VSSMAOpp):
 
     def __init__(self, n_robots_control=3):
         super().__init__(n_robots_control=n_robots_control)
-        self.coach = None
-        self.opp_path = "/home/user/football/HRL/models/selfplay_opponent"
+        self.opp_coach = None
+        self.opp_path = "/home/user/football/HRL/models/selfplay_opponent/"
         self.opp_goal = [[0, 0], [0, 0]]
-        self.opp_attacker = 0
+        self.opp_attacker = [0]
         self.opp_defender_1 = 1
         self.opp_defender_2 = 2
 
+    def step(self, action):
+        observation, reward, done, _ = super().step(action)
+        if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
+            self.opp_attacker.append(self.opp_defender_1)
+        if self.reach_goal(self.defender_2,  "yellow",self.opp_goal[1]):
+            self.opp_attacker.append(self.opp_defender_2)
+        return observation, reward, done, self.reward_shaping_total
+
     def load_opp(self):
-        super().load_opp()
-        coach_path = f"{self.opp_path}/coach.pth"
-        self.coach.load_model(coach_path)
+        try:
+            super().load_opp()
+        except FileNotFoundError:
+            print("No opponent model found. Will use random opponent.")
+        coach_path = f"{self.opp_path}coach"
+        self.opp_coach = Coach_MMOE(self.args, self.writer)
+        self.opp_coach.load_model(coach_path)
 
     def _opp_obs(self):
-        raise NotImplementedError()
+        observation = []
+        observation.append(self.norm_pos(-self.frame.ball.x))
+        observation.append(self.norm_pos(self.frame.ball.y))
+        observation.append(self.norm_v(-self.frame.ball.v_x))
+        observation.append(self.norm_v(self.frame.ball.v_y))
 
-    def set_opponent_attacker_and_goal(self, goal):
-        self.opp_goal = goal
-        self.opp_attacker = self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y],"yellow")
-        self.opp_defender_1 = self._get_closet_robot_idx(goal[0],"yellow", except_idx=self.attacker)
-        for i in range(self.n_robots_control):
-            if i != self.opp_attacker and i != self.opp_defender_1:
-                self.opp_defender_2 = i
+        #  we reflect the side that the opp is attacking,
+        #  so that he will attack towards the goal where the goalkeeper is
+        for i in range(self.n_robots_yellow):
+            observation.append(self.norm_pos(-self.frame.robots_yellow[i].x))
+            observation.append(self.norm_pos(self.frame.robots_yellow[i].y))
 
-    def _get_commands(self, actions):
-        raise NotImplementedError()
-        commands = []
-        self.actions = {}
+            observation.append(
+                np.sin(np.deg2rad(self.frame.robots_yellow[i].theta))
+            )
+            observation.append(
+                -np.cos(np.deg2rad(self.frame.robots_yellow[i].theta))
+            )
+            observation.append(self.norm_v(-self.frame.robots_yellow[i].v_x))
+            observation.append(self.norm_v(self.frame.robots_yellow[i].v_y))
+
+            observation.append(self.norm_w(-self.frame.robots_yellow[i].v_theta))
 
         for i in range(self.n_robots_blue):
-            self.actions[i] = actions[i]
-            v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
-            commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
-                                  v_wheel1=v_wheel1))
-        opp_obs = self._opp_obs()
+            observation.append(self.norm_pos(-self.frame.robots_blue[i].x))
+            observation.append(self.norm_pos(self.frame.robots_blue[i].y))
+            observation.append(self.norm_v(-self.frame.robots_blue[i].v_x))
+            observation.append(self.norm_v(self.frame.robots_blue[i].v_y))
+            observation.append(self.norm_w(-self.frame.robots_blue[i].v_theta))
 
-        for i in range(self.n_robots_yellow):
-            if len(self.opps) != 0:
-                a = self.opps[i].choose_action(opp_obs[i], noise_std=0)
-                opp_action = copy.deepcopy(a)
+        # get rotated
+        observations = []
+        observations.append(observation)
+        player_0 = copy.deepcopy(observation[4 + (7 * 0): 11 + (7 * 0)])
+        player_1 = copy.deepcopy(observation[4 + (7 * 1): 11 + (7 * 1)])
+        player_2 = copy.deepcopy(observation[4 + (7 * 2): 11 + (7 * 2)])
+        observation_1 = copy.deepcopy(observation)
+        observation_1[4 + (7 * 0): 11 + (7 * 0)] = player_1
+        observation_1[4 + (7 * 1): 11 + (7 * 1)] = player_0
+        observations.append(observation_1)
+        observation_2 = copy.deepcopy(observation)
+        observation_2[4 + (7 * 0): 11 + (7 * 0)] = player_2
+        observation_2[4 + (7 * 2): 11 + (7 * 2)] = player_0
+        observations.append(observation_2)
+
+        for idx in range(self.n_robots_yellow):
+            # append goal and role
+            if idx in self.attacker:
+                observations[idx].append(self.norm_pos(self.frame.ball.x))
+                observations[idx].append(self.norm_pos(self.frame.ball.y))
+                observations[idx].append(0)
+            elif idx == self.defender_1:
+                observations[idx].append(self.norm_pos(self.goal[0][0]))
+                observations[idx].append(self.norm_pos(self.goal[0][1]))
+                observations[idx].append(1)
+            elif idx == self.defender_2:
+                observations[idx].append(self.norm_pos(self.goal[1][0]))
+                observations[idx].append(self.norm_pos(self.goal[1][1]))
+                observations[idx].append(1)
             else:
-                opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
-            v_wheel1, v_wheel0 = self._actions_to_v_wheels(opp_action)
-            commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
-                                  v_wheel1=v_wheel1))
-        return commands
+                raise Exception(f"idx{idx} is neither attacker nor defender")
 
+        # Append coach observation
+        observations.append(np.array(observations[0][:40], dtype=np.float32))
+        observations = np.array(observations)
+        self.opp_obs = observations
+        return observations
 
+    def set_attacker_and_goal(self, goal):
+        super().set_attacker_and_goal(goal)
+        if self.opp_obs is None:
+            self._opp_obs()
+        coach_obs = self.opp_obs[-1]
+        opp_goal = self.opp_coach.choose_action(coach_obs)
+        self.opp_goal = opp_goal
+        self.opp_attacker = [self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y], "yellow")]
+        self.opp_defender_1 = self._get_closet_robot_idx(goal[0], "yellow", except_idx=self.opp_attacker[0])
+        for i in range(self.n_robots_control):
+            if i != self.opp_attacker[0] and i != self.opp_defender_1:
+                self.opp_defender_2 = i
 
 if __name__ == '__main__':
     env = VSSMAEnv()

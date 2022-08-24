@@ -83,14 +83,15 @@ class CoachReplayBuffer(object):
         self.buffer_tag = np.empty((self.buffer_size, 2))
 
     def obs_to_tag(self, obs):
-        field_length = 2.4  # 1.5
-        field_width = 2.4  # 1.3
+        field_length = 1.5
+        field_width = 1.3
         n = 6
         ball_x = obs[0]
         ball_y = obs[1]
-        tag_x = int((ball_x + field_width / 2) / (field_width / n))
-        tag_y = int((ball_y + field_length / 2) / (field_length / n))
+        tag_x = int(((ball_x * 0.9) + (field_length / 2)) / (field_length / n))
+        tag_y = int(((ball_y * 0.9) + (field_width / 2)) / (field_width / n))
         return [tag_x, tag_y]
+
 
     def store_transition(self, init_obs, new_obs):
         self.buffer_obs[self.count] = init_obs

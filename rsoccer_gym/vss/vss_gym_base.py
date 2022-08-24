@@ -130,21 +130,21 @@ class VSSBaseEnv(gym.Env):
 
     def norm_pos(self, pos):
         return np.clip(
-            pos / self.max_pos,
+            pos / self.max_pos,#self.max_pos=0.9
             -self.NORM_BOUNDS,
             self.NORM_BOUNDS
         )
 
     def norm_v(self, v):
         return np.clip(
-            v / self.max_v,
+            v / self.max_v,#self.max_v=1.1979939985689076
             -self.NORM_BOUNDS,
             self.NORM_BOUNDS
         )
 
     def norm_w(self, w):
         return np.clip(
-            w / self.max_w,
+            w / self.max_w,#self.max_w=1715.9999999999998
             -self.NORM_BOUNDS,
             self.NORM_BOUNDS
         )

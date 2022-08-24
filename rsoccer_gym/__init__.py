@@ -14,7 +14,10 @@ register(id='VSSMAOpp-v0',
          entry_point='rsoccer_gym.vss.env_ma:VSSMAOpp',
          max_episode_steps=1200
          )
-
+register(id='VSSMASelfplay-v0',
+         entry_point='rsoccer_gym.vss.env_ma:VSSMASelfplay',
+         max_episode_steps=1200
+         )
 register(id='VSSGk-v0',
          entry_point='rsoccer_gym.vss.env_gk:rSimVSSGK',
          max_episode_steps=1200

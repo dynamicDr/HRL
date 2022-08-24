@@ -88,5 +88,8 @@ class MATD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-    def save_model(self, env_name, number, total_steps, agent_id):
-        torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(number, int(total_steps / 1000), agent_id))
+    def save_model(self, number, total_steps, agent_id,save_path = None,save_as_opp = False):
+        if save_as_opp:
+            torch.save(self.actor.state_dict(), f"{save_path}opp_{agent_id}")
+        else:
+            torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(number, int(total_steps / 1000), agent_id))

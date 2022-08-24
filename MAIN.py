@@ -43,7 +43,8 @@ class Runner:
         # Create N agents and coach
         self.agent_n = [MATD3(args, agent_id, self.writer) for agent_id in range(args.N)]
         self.coach = Coach_MMOE(args, self.writer)
-        self.coach.load_model(self.args.mmoe_model_load_path)
+        if self.args.restore_coach:
+            self.coach.load_model(self.args.mmoe_model_load_path)
         self.replay_buffer = ReplayBuffer(self.args)
         self.coach_replay_buffer = CoachReplayBuffer(self.args)
 
@@ -57,6 +58,10 @@ class Runner:
             self.noise_std = self.args.noise_std_init  # Initialize noise_std
 
     def run(self):
+        # For selfplay: load model
+        if self.args.self_play:
+            self.env.load_opp()
+
         while self.episode < self.args.max_episode:
             # For each episode..
             obs = self.env.reset()
@@ -123,11 +128,17 @@ class Runner:
                 # Train coach
                 self.coach.train(self.coach_replay_buffer, self.total_steps)
 
-            # Save model and TODO:update opponent
+            # Save model and For selfplay:update opponent
             if self.episode % self.args.save_rate == 0 and not self.args.display:
                 for i in range(args.N):
-                    self.agent_n[i].save_model(env_name, number, self.total_steps, i)
-                self.coach.save_model(number, self.total_steps,online_training=True)
+                    self.agent_n[i].save_model(number, self.total_steps, i)
+                    if self.args.self_play:
+                        self.agent_n[i].save_model(number, self.total_steps, i,self.args.opp_path, save_as_opp=True)
+                self.coach.save_model(number, self.total_steps,self.args.mmoe_model_save_path)
+
+                if self.args.self_play:
+                    self.coach.save_model(number, self.total_steps, self.args.opp_path, save_as_opp = True)
+                    self.env.load_opp()
 
             avg_train_reward = episode_reward / episode_step
             print("============epi={},step={},avg_reward={},goal_score={}==============".format(self.episode,
@@ -164,7 +175,7 @@ if __name__ == '__main__':
     parser.add_argument("--tau", type=float, default=0.01, help="Softly update the target network")
     parser.add_argument("--use_orthogonal_init", type=bool, default=True, help="Orthogonal initialization")
     parser.add_argument("--use_grad_clip", type=bool, default=True, help="Gradient clip")
-    parser.add_argument("--save_rate", type=int, default=200,
+    parser.add_argument("--save_rate", type=int, default=100,
                         help="Model save per n episode")
     parser.add_argument("--record_reward", type=bool, default=True, help="Record detailed reward to tensorboard")
     # --------------------------------------MATD3--------------------------------------------------------------------
@@ -173,7 +184,7 @@ if __name__ == '__main__':
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
     parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
     parser.add_argument("--restore_model_dir", type=str,
-                        default="./models/agent/actor_number_6_1079k_agent_{}.pth",
+                        default="./models/agent/actor_number_10_524k_agent_{}.pth",
                         help="Restore from checkpoint")
     parser.add_argument("--display", type=bool, default=False, help="Display mode")
     # ------------------------------------- HRL-------------------------------------------------------------------
@@ -184,22 +195,33 @@ if __name__ == '__main__':
     parser.add_argument("--lr_mmoe", type=float, default=1e-4, help="Learning rate of mmoe")
     parser.add_argument("--coach_buffer_size", type=int, default=int(3e3), help="The capacity of the replay buffer")
     parser.add_argument("--coach_batch_size", type=int, default=1024, help="Batch size")
+    parser.add_argument("--restore_coach", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/moe_num_6_1079k")
+                        default="./models/coach/state_dict")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
+    # ------------------------------------- Self-play------------------------------------------------------------
+    parser.add_argument("--self_play", type=bool, default=True)
+    parser.add_argument("--opp_path", type=str,
+                        default="./models/selfplay_opponent/")
     args = parser.parse_args()
     args.noise_std_decay = (args.noise_std_init - args.noise_std_min) / args.noise_decay_steps
 
-    env_name = "VSSMA-v0"
+    if args.self_play:
+        env_name = "VSSMASelfplay-v0"
+    else:
+        env_name = "VSSMA-v0"
     seed = 0
-    number = 9
+    number = 14
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 
     # Save args
-    with open(f'./models/args/args_num{number}.pkl', 'wb') as f:
+    with open(f'./models/args/args_num{number}.npy', 'wb') as f:
         pickle.dump(runner.args, f)
+    if args.self_play and not args.display:
+        with open(f'{args.opp_path}args.npy', 'wb') as f:
+            pickle.dump(runner.args, f)
 
     if args.restore:
         load_number = re.findall(r"number_(.+?)_", args.restore_model_dir)[0]

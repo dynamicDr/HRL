@@ -12,7 +12,6 @@ class Coach_MMOE(object):
         self.mmoe_net.eval()
         self.loss_function = nn.CrossEntropyLoss()
         self.optimizer = torch.optim.Adam(self.mmoe_net.parameters(), lr=args.lr_mmoe)
-        self.save_path = args.mmoe_model_save_path
 
     def reset_lr(self,lr):
         self.optimizer = torch.optim.Adam(self.mmoe_net.parameters(), lr=lr)
@@ -53,14 +52,16 @@ class Coach_MMOE(object):
         self.writer.add_scalar('MMOE loss', loss, global_step=step)
 
     def load_model(self, model_path):
-        self.mmoe_net = torch.load(model_path)
+        self.mmoe_net.load_state_dict(torch.load(model_path))
         print(f"Successfully load mmoe model. model_path:{model_path}")
 
-    def save_model(self, number, total_steps, online_training = False):
+    def save_model(self, number, total_steps,save_path, online_training = False, save_as_opp = False):
         if online_training:
-            torch.save(self.mmoe_net, f"{self.save_path}online_trained_moe_num_{number}_{int(total_steps / 1000)}k")
+            torch.save(self.mmoe_net.state_dict(), f"{save_path}online_trained_moe_num_{number}_{int(total_steps / 1000)}k")
+        elif save_as_opp:
+            torch.save(self.mmoe_net.state_dict(), f"{save_path}coach")
         else:
-            torch.save(self.mmoe_net, f"{self.save_path}moe_num_{number}_{int(total_steps / 1000)}k")
+            torch.save(self.mmoe_net.state_dict(), f"{save_path}moe_num_{number}_{int(total_steps / 1000)}k")
 
 if __name__ == '__main__':
     # a = [0.3949057, -0.67849123, 0.49404806, -0.8383228, -0.6695515, -0.5077701,
