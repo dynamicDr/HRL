@@ -182,11 +182,11 @@ if __name__ == '__main__':
     parser.add_argument("--policy_noise", type=float, default=0.2, help="Target policy smoothing")
     parser.add_argument("--noise_clip", type=float, default=0.5, help="Clip noise")
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
-    parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
+    parser.add_argument("--restore", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--restore_model_dir", type=str,
-                        default="./models/agent/actor_number_10_524k_agent_{}.pth",
+                        default="./models/agent/actor_number_15_2157k_agent_{}.pth",
                         help="Restore from checkpoint")
-    parser.add_argument("--display", type=bool, default=False, help="Display mode")
+    parser.add_argument("--display", type=bool, default=True, help="Display mode")
     # ------------------------------------- HRL-------------------------------------------------------------------
     parser.add_argument("--coach_hidden_dim", type=int, default=64,
                         help="The number of neurons in hidden layers of the neural network")
@@ -197,7 +197,7 @@ if __name__ == '__main__':
     parser.add_argument("--coach_batch_size", type=int, default=1024, help="Batch size")
     parser.add_argument("--restore_coach", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/state_dict")
+                        default="./models/coach/moe_num_15_2157k")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
     # ------------------------------------- Self-play------------------------------------------------------------
@@ -212,7 +212,7 @@ if __name__ == '__main__':
     else:
         env_name = "VSSMA-v0"
     seed = 0
-    number = 14
+    number = 15
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 

@@ -125,11 +125,9 @@ class VSSMAEnv(VSSBaseEnv):
         if self.defender_1 not in self.attacker:
             if self.reach_goal(self.defender_1, "blue",self.goal[0]):
                 self.attacker.append(self.defender_1)
-                print(self.attacker)
         if self.defender_2 not in self.attacker:
             if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
                 self.attacker.append(self.defender_2)
-                print(self.attacker)
         for i in range(2):
             robot = Robot()
             robot.id = i
@@ -565,11 +563,10 @@ class VSSMAOpp(VSSMAEnv):
             v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
             commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
                                   v_wheel1=v_wheel1))
-        opp_obs = self.opp_obs
-
+        self.opp_obs = self._opp_obs()
         for i in range(self.n_robots_yellow):
             if len(self.opps) != 0:
-                a = self.opps[i].choose_action(opp_obs[i], noise_std=0)
+                a = self.opps[i].choose_action(self.opp_obs[i], noise_std=0)
                 opp_action = copy.deepcopy(a)
             else:
                 opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
@@ -594,8 +591,9 @@ class VSSMASelfplay(VSSMAOpp):
         observation, reward, done, _ = super().step(action)
         if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
             self.opp_attacker.append(self.opp_defender_1)
-        if self.reach_goal(self.defender_2,  "yellow",self.opp_goal[1]):
+        if self.reach_goal(self.opp_defender_2,  "yellow",self.opp_goal[1]):
             self.opp_attacker.append(self.opp_defender_2)
+
         return observation, reward, done, self.reward_shaping_total
 
     def load_opp(self):
@@ -655,17 +653,17 @@ class VSSMASelfplay(VSSMAOpp):
 
         for idx in range(self.n_robots_yellow):
             # append goal and role
-            if idx in self.attacker:
+            if idx in self.opp_attacker:
                 observations[idx].append(self.norm_pos(self.frame.ball.x))
                 observations[idx].append(self.norm_pos(self.frame.ball.y))
                 observations[idx].append(0)
-            elif idx == self.defender_1:
-                observations[idx].append(self.norm_pos(self.goal[0][0]))
-                observations[idx].append(self.norm_pos(self.goal[0][1]))
+            elif idx == self.opp_defender_1:
+                observations[idx].append(self.norm_pos(self.opp_goal[0][0]))
+                observations[idx].append(self.norm_pos(self.opp_goal[0][1]))
                 observations[idx].append(1)
-            elif idx == self.defender_2:
-                observations[idx].append(self.norm_pos(self.goal[1][0]))
-                observations[idx].append(self.norm_pos(self.goal[1][1]))
+            elif idx == self.opp_defender_2:
+                observations[idx].append(self.norm_pos(self.opp_goal[1][0]))
+                observations[idx].append(self.norm_pos(self.opp_goal[1][1]))
                 observations[idx].append(1)
             else:
                 raise Exception(f"idx{idx} is neither attacker nor defender")

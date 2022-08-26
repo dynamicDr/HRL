@@ -14,12 +14,12 @@ from rsoccer_gym.vss.env_ma import VSSMAOpp
 
 
 max_episode = 10000
-number = 6
+number = 7
 seed = 1
 display = True
 record_reward = True
 
-online_training = False
+online_training = True
 online_training_freq = 1 # train 1 batch per n step
 online_training_lr = 1e-4
 save_rate = 100 # save online trained coach per n episode
