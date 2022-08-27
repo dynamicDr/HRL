@@ -13,10 +13,10 @@ from rsoccer_gym.vss.env_ma import VSSMAOpp
 
 
 
-max_episode = 10000
-number = 7
-seed = 1
-display = True
+max_episode = 500
+number = 0
+seed = 0
+display = False
 record_reward = True
 
 online_training = True
@@ -28,6 +28,7 @@ if display:
     online_training = False
 
 env: VSSMAOpp = gym.make('VSSMAOpp-v0')
+env.multiple_attacker_mode = True
 
 # Set random seed
 np.random.seed(seed)
@@ -38,9 +39,9 @@ writer = SummaryWriter(
     log_dir='runs/match/match_num_{}_seed_{}'.format(number,seed))
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_6_3451k"
-agent_model_load_path =  "models/agent/actor_number_6_3451k_agent_{}.pth"
-args_load_path = "models/args/args_num6.pkl"
+mmoe_model_load_path = "models/coach/moe_num_15_2232k"
+agent_model_load_path =  "models/agent/actor_number_15_2232k_agent_{}.pth"
+args_load_path = "models/args/args_num15.npy"
 with open(args_load_path, 'rb') as f:
     args = pickle.load(f)
 agent_n = [MATD3(args, agent_id, writer) for agent_id in range(args.N)]
@@ -116,7 +117,7 @@ while episode < max_episode:
         coach.train(coach_replay_buffer, total_steps)
 
     if episode % save_rate == 0 and not display:
-        coach.save_model(number, total_steps,online_training=True)
+        coach.save_model(number, total_steps,"/home/user/football/HRL/models/coach/",online_training=True)
 
     avg_train_reward = episode_reward / episode_step
     print("============match={},step={},avg_reward={},goal_score={}==============".format(episode,

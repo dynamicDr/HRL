@@ -1,0 +1,14 @@
+num 6: no self play, 30-frame update goal, single attacker
+num 15:yes selfplay, 10-frame update goal, multiple_attacker(if a defender achieve goal area, be an attaker).
+num 16: yes selfplay, 30-frame update goal, multiple_attacker(if a defender achieve goal area, be an attaker).
+
+
+====================================
+
+
+match 0: num15 2232k vs matd3 2323k multi attacker
+match 1: num15 2232k vs matd3 2323k single attacker
+
+match 2: num6 4094k vs matd3 4094k multi attacker
+match 3: num6 4094k vs matd3 4094k single attacker
+

@@ -94,6 +94,7 @@ class VSSMAEnv(VSSBaseEnv):
             self.ou_actions.append(
                 OrnsteinUhlenbeckAction(self.action_space, dt=self.time_step)
             )
+        self.multiple_attacker_mode = True
 
         print('Environment initialized')
 
@@ -122,12 +123,14 @@ class VSSMAEnv(VSSBaseEnv):
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
-        if self.defender_1 not in self.attacker:
-            if self.reach_goal(self.defender_1, "blue",self.goal[0]):
-                self.attacker.append(self.defender_1)
-        if self.defender_2 not in self.attacker:
-            if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
-                self.attacker.append(self.defender_2)
+        if self.multiple_attacker_mode:
+            if self.defender_1 not in self.attacker:
+                if self.reach_goal(self.defender_1, "blue",self.goal[0]):
+                    self.attacker.append(self.defender_1)
+            if self.defender_2 not in self.attacker:
+                if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
+                    self.attacker.append(self.defender_2)
+        print(self.attacker)
         for i in range(2):
             robot = Robot()
             robot.id = i
@@ -589,10 +592,11 @@ class VSSMASelfplay(VSSMAOpp):
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
-        if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
-            self.opp_attacker.append(self.opp_defender_1)
-        if self.reach_goal(self.opp_defender_2,  "yellow",self.opp_goal[1]):
-            self.opp_attacker.append(self.opp_defender_2)
+        if self.multiple_attacker_mode:
+            if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
+                self.opp_attacker.append(self.opp_defender_1)
+            if self.reach_goal(self.opp_defender_2,  "yellow",self.opp_goal[1]):
+                self.opp_attacker.append(self.opp_defender_2)
 
         return observation, reward, done, self.reward_shaping_total
 

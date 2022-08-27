@@ -52,7 +52,11 @@ class Coach_MMOE(object):
         self.writer.add_scalar('MMOE loss', loss, global_step=step)
 
     def load_model(self, model_path):
-        self.mmoe_net.load_state_dict(torch.load(model_path))
+        file = torch.load(model_path)
+        if type(file) == MMOE:
+            self.mmoe_net.load_state_dict(torch.load(model_path).state_dict())
+        else:
+            self.mmoe_net.load_state_dict(torch.load(model_path))
         print(f"Successfully load mmoe model. model_path:{model_path}")
 
     def save_model(self, number, total_steps,save_path, online_training = False, save_as_opp = False):
