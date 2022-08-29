@@ -49,7 +49,8 @@ class Coach_MMOE(object):
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        self.writer.add_scalar('MMOE loss', loss, global_step=step)
+        if self.writer is not None:
+            self.writer.add_scalar('MMOE loss', loss, global_step=step)
 
     def load_model(self, model_path):
         file = torch.load(model_path)

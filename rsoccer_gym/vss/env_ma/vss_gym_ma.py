@@ -329,6 +329,8 @@ class VSSMAEnv(VSSBaseEnv):
         return reward, done
 
     def write_log(self, writer, step_num):
+        if writer is None:
+            return
         if self.writer is None:
             self.writer = writer
         self.writer.add_scalar(f'Ball Grad Reward', self.reward_shaping_total['ball_grad'], global_step=step_num)

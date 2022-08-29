@@ -13,8 +13,10 @@ from rsoccer_gym.vss.env_ma import VSSMAOpp
 
 
 
+# =====================================================
+
 max_episode = 500
-number = 0
+match_number = 8
 seed = 0
 display = False
 record_reward = True
@@ -24,24 +26,31 @@ online_training_freq = 1 # train 1 batch per n step
 online_training_lr = 1e-4
 save_rate = 100 # save online trained coach per n episode
 
+multi_attacker_mode = False
+
+# =====================================================
+
 if display:
     online_training = False
 
 env: VSSMAOpp = gym.make('VSSMAOpp-v0')
-env.multiple_attacker_mode = True
+env.multiple_attacker_mode = multi_attacker_mode
 
 # Set random seed
 np.random.seed(seed)
 torch.manual_seed(seed)
 
 # Create a tensorboard
-writer = SummaryWriter(
-    log_dir='runs/match/match_num_{}_seed_{}'.format(number,seed))
+if not display:
+    writer = SummaryWriter(
+        log_dir='runs/match/match_num_{}_seed_{}'.format(match_number, seed))
+else:
+    writer = None
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_15_2232k"
-agent_model_load_path =  "models/agent/actor_number_15_2232k_agent_{}.pth"
-args_load_path = "models/args/args_num15.npy"
+mmoe_model_load_path = "models/coach/moe_num_16_2520k"
+agent_model_load_path =  "models/agent/actor_number_16_2520k_agent_{}.pth"
+args_load_path = "models/args/args_num16.npy"
 with open(args_load_path, 'rb') as f:
     args = pickle.load(f)
 agent_n = [MATD3(args, agent_id, writer) for agent_id in range(args.N)]
@@ -84,7 +93,7 @@ while episode < max_episode:
         agent_r_n = reward_list
         if display:
             env.render()
-        if record_reward:
+        if record_reward and writer is not None:
             env.write_log(writer,total_steps)
         agent_obs_next_n = obs_next[:-1]
         obs = obs_next
@@ -117,14 +126,14 @@ while episode < max_episode:
         coach.train(coach_replay_buffer, total_steps)
 
     if episode % save_rate == 0 and not display:
-        coach.save_model(number, total_steps,"/home/user/football/HRL/models/coach/",online_training=True)
+        coach.save_model(match_number, total_steps, "/home/user/football/HRL/models/coach/", online_training=True)
 
     avg_train_reward = episode_reward / episode_step
     print("============match={},step={},avg_reward={},goal_score={}==============".format(episode,
                                                                                         total_steps,
                                                                                         avg_train_reward,
                                                                                         info["goal_score"]))
-
-    writer.add_scalar('Agent rewards for each episode', avg_train_reward, global_step=episode)
-    writer.add_scalar('Goal', info["goal_score"], global_step=episode)
+    if writer is not None:
+        writer.add_scalar('Agent rewards for each episode', avg_train_reward, global_step=episode)
+        writer.add_scalar('Goal', info["goal_score"], global_step=episode)
 env.close()
