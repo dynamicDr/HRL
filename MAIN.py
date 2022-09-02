@@ -48,14 +48,71 @@ class Runner:
         self.replay_buffer = ReplayBuffer(self.args)
         self.coach_replay_buffer = CoachReplayBuffer(self.args)
 
-        self.total_steps = 0
-        self.episode = 0
-        self.goal_count = 0
+        if self.args.restore:
+            self.total_steps = self.args.restore_step
+            self.episode = self.args.restore_episode
+        else:
+            self.total_steps = 0
+            self.episode = 0
 
         if self.args.display:
             self.noise_std = 0
+        elif self.args.restore:
+            self.noise_std = self.args.noise_std_min
         else:
             self.noise_std = self.args.noise_std_init  # Initialize noise_std
+
+    def restore_train(self):
+        # For selfplay: load model
+        if self.args.self_play:
+            self.env.load_opp()
+
+        while self.replay_buffer.current_size<self.args.batch_size or self.coach_replay_buffer.current_size<self.args.coach_batch_size:
+            # For each episode..
+            obs = self.env.reset()
+            coach_obs = obs[-1]
+            terminate = False
+            done = False
+            episode_step = 0
+            episode_reward = 0
+            goal_step = 0
+            # Give a initial goal for this episode
+            goal = self.coach.choose_action(coach_obs)
+            self.env.set_attacker_and_goal(goal)
+            goal_init_obs = coach_obs
+            agent_obs_n = self.env.observation[:-1]
+            while not (done or terminate):
+                # For each step...
+                a_n = [agent.choose_action(obs, noise_std=self.noise_std) for agent, obs in
+                       zip(self.agent_n, agent_obs_n)]
+                obs_next, r_n, done, info = self.env.step(copy.deepcopy(a_n))
+                reward_list = list(r_n.values())
+                agent_r_n = reward_list
+                agent_obs_next_n = obs_next[:-1]
+
+                # Store the transition
+                self.replay_buffer.store_transition(agent_obs_n, a_n, agent_r_n, agent_obs_next_n, done)
+                obs = obs_next
+                coach_obs = obs_next[-1]
+                agent_obs_n = obs_next[:-1]
+                episode_step += 1
+                goal_step += 1
+                episode_reward += sum(r_n.values())
+
+                if episode_step >= self.args.episode_limit:
+                    terminate = True
+
+                # Update the goal
+                if goal_step == self.args.goal_update_freq or (terminate or done):
+                    self.coach_replay_buffer.store_transition(goal_init_obs, coach_obs)
+                    if not (terminate or done):
+                        # give a new goal
+                        goal = self.coach.choose_action(coach_obs)
+                        self.env.set_attacker_and_goal(goal)
+                        goal_init_obs = coach_obs
+                        agent_obs_n = self.env.observation[:-1]
+                        goal_step = 0
+            print(f"============Restore buffer {self.replay_buffer.current_size}/{self.args.batch_size} coach_buffer{self.coach_replay_buffer.current_size}/{self.args.coach_batch_size}==============")
 
     def run(self):
         # For selfplay: load model
@@ -121,7 +178,6 @@ class Runner:
                         goal_init_obs = coach_obs
                         agent_obs_n = self.env.observation[:-1]
                         goal_step = 0
-                        self.goal_count += 1
             self.episode += 1
 
             if self.coach_replay_buffer.current_size >= self.args.coach_batch_size and not self.args.display:
@@ -182,9 +238,12 @@ if __name__ == '__main__':
     parser.add_argument("--policy_noise", type=float, default=0.2, help="Target policy smoothing")
     parser.add_argument("--noise_clip", type=float, default=0.5, help="Clip noise")
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
-    parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
+    parser.add_argument("--restore", type=bool, default=True, help="Restore from checkpoint")
+    parser.add_argument("--restore_episode", type=int, default=14291, help="Restore from checkpoint")
+    parser.add_argument("--restore_step", type=int, default=3649071, help="Restore from checkpoint")
+
     parser.add_argument("--restore_model_dir", type=str,
-                        default="./models/agent/actor_number_15_2157k_agent_{}.pth",
+                        default="./models/agent/actor_number_16_3627k_agent_{}.pth",
                         help="Restore from checkpoint")
     parser.add_argument("--display", type=bool, default=False, help="Display mode")
     # ------------------------------------- HRL-------------------------------------------------------------------
@@ -197,7 +256,7 @@ if __name__ == '__main__':
     parser.add_argument("--coach_batch_size", type=int, default=1024, help="Batch size")
     parser.add_argument("--restore_coach", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/state_dict")
+                        default="./models/coach/moe_num_16_3627k")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
     # ------------------------------------- Self-play------------------------------------------------------------
@@ -212,7 +271,7 @@ if __name__ == '__main__':
     else:
         env_name = "VSSMA-v0"
     seed = 0
-    number = 16
+    number = 17
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 
@@ -229,5 +288,6 @@ if __name__ == '__main__':
         print("Loading...")
         for i in range(len(runner.agent_n)):
             runner.agent_n[i].actor.load_state_dict(torch.load(args.restore_model_dir.format(i)))
+        runner.restore_train()
     print("Start runner.run()")
     runner.run()

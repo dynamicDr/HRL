@@ -16,7 +16,7 @@ from rsoccer_gym.vss.env_ma import VSSMAOpp
 # =====================================================
 
 max_episode = 500
-match_number = 8
+match_number = 18
 seed = 0
 display = False
 record_reward = True
@@ -26,7 +26,7 @@ online_training_freq = 1 # train 1 batch per n step
 online_training_lr = 1e-4
 save_rate = 100 # save online trained coach per n episode
 
-multi_attacker_mode = False
+multi_attacker_mode = True
 
 # =====================================================
 
@@ -48,11 +48,13 @@ else:
     writer = None
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_16_2520k"
-agent_model_load_path =  "models/agent/actor_number_16_2520k_agent_{}.pth"
-args_load_path = "models/args/args_num16.npy"
+mmoe_model_load_path = "models/coach/moe_num_6_4094k"
+agent_model_load_path =  "models/agent/actor_number_6_4094k_agent_{}.pth"
+args_load_path = "models/args/args_num6.pkl"
+
 with open(args_load_path, 'rb') as f:
     args = pickle.load(f)
+    print(args)
 agent_n = [MATD3(args, agent_id, writer) for agent_id in range(args.N)]
 coach = Coach_MMOE(args, writer)
 coach.load_model(mmoe_model_load_path)
@@ -68,6 +70,10 @@ coach_replay_buffer = CoachReplayBuffer(args)
 total_steps = 0
 episode = 0
 goal_count = 0
+
+win=0
+lose = 0
+draw = 0
 
 while episode < max_episode:
     # For each episode..
@@ -133,7 +139,19 @@ while episode < max_episode:
                                                                                         total_steps,
                                                                                         avg_train_reward,
                                                                                         info["goal_score"]))
+    if info["goal_score"] == 0:
+        draw+=1
+    elif info["goal_score"] == 1:
+        win +=1
+    elif info["goal_score"] == -1:
+        lose +=1
+    else:
+        Exception("info[goal_score] is wrong")
+
     if writer is not None:
         writer.add_scalar('Agent rewards for each episode', avg_train_reward, global_step=episode)
         writer.add_scalar('Goal', info["goal_score"], global_step=episode)
 env.close()
+print(f"num:{match_number}")
+print(f"total:{max_episode},win:{win},lose:{lose},draw:{draw}")
+print(f"total_score:{win-lose}")

@@ -96,6 +96,9 @@ class VSSMAEnv(VSSBaseEnv):
             )
         self.multiple_attacker_mode = True
 
+        # -------------------------------------Evaluation------------------------------------------------------------
+        self.last_possession = [-1, -1]
+
         print('Environment initialized')
 
     def reset(self):
@@ -130,7 +133,7 @@ class VSSMAEnv(VSSBaseEnv):
             if self.defender_2 not in self.attacker:
                 if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
                     self.attacker.append(self.defender_2)
-        print(self.attacker)
+        # print(self.attacker)
         for i in range(2):
             robot = Robot()
             robot.id = i
@@ -486,6 +489,224 @@ class VSSMAEnv(VSSBaseEnv):
         en_penalty_2 = abs(self.sent_commands[robot_idx].v_wheel1)
         energy_penalty = - (en_penalty_1 + en_penalty_2)
         return energy_penalty
+
+    # -------------------------------------Evaluation------------------------------------------------------------
+    def ball_possession(self):
+        '''
+        return [team_id, robot_id]
+        team_id:
+        0: blue team
+        1: yellow team
+        -1: no team possesses the ball
+        robot_id:
+        0: id 0 robot
+        1: id 1 robot
+        2: id 2 robot
+        -1: no robot possesses the ball
+        '''
+        possession = [-1, -1]
+        ball_position = []
+        robots_blue_position = []
+        robots_yellow_position = []
+
+        ball_position.append(self.frame.ball.x)
+        ball_position.append(self.frame.ball.y)
+        for i in range(self.n_robots_blue):
+            robots_blue_position.append(self.frame.robots_blue[i].x)
+            robots_blue_position.append(self.frame.robots_blue[i].y)
+            robots_blue_position.append(np.sin(np.deg2rad(self.frame.robots_blue[i].theta)))
+            robots_blue_position.append(np.cos(np.deg2rad(self.frame.robots_blue[i].theta)))
+        for i in range(self.n_robots_yellow):
+            robots_yellow_position.append(self.frame.robots_yellow[i].x)
+            robots_yellow_position.append(self.frame.robots_yellow[i].y)
+            robots_yellow_position.append(np.sin(np.deg2rad(self.frame.robots_yellow[i].theta)))
+            robots_yellow_position.append(np.cos(np.deg2rad(self.frame.robots_yellow[i].theta)))
+
+        possession_number = 0
+        for i in range(self.n_robots_blue):
+            robot_distance_to_ball_edge = np.linalg.norm(np.array([robots_blue_position[i*4],robots_blue_position[i*4+1]]) - np.array(ball_position))
+            if robot_distance_to_ball_edge <= 0.06135:
+                possession = [0, i]
+                possession_number = possession_number + 1
+            else:
+                a = np.array([robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (-robots_blue_position[i * 4 + 3] + robots_blue_position[i * 4 + 2]),
+                     0.04 * (-robots_blue_position[i * 4 + 2] - robots_blue_position[i * 4 + 3])])
+                b = np.array([robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (robots_blue_position[i * 4 + 3] + robots_blue_position[i * 4 + 2]),
+                     0.04 * (robots_blue_position[i * 4 + 2] - robots_blue_position[i * 4 + 3])])
+                c = np.array([robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (robots_blue_position[i * 4 + 3] - robots_blue_position[i * 4 + 2]),
+                     0.04 * (robots_blue_position[i * 4 + 2] + robots_blue_position[i * 4 + 3])])
+                d = np.array([robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (-robots_blue_position[i * 4 + 3] - robots_blue_position[i * 4 + 2]),
+                     0.04 * (-robots_blue_position[i * 4 + 2] + robots_blue_position[i * 4 + 3])])
+                da = np.linalg.norm(np.array(ball_position) - a)
+                db = np.linalg.norm(np.array(ball_position) - b)
+                dc = np.linalg.norm(np.array(ball_position) - c)
+                dd = np.linalg.norm(np.array(ball_position) - d)
+                # print('ball x:{}, y:{}'.format(ball_position[0],ball_position[1]))
+                # print('blue i:{}, x:{}, y:{}'.format(i,robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]))
+                # print('blue i:{},a:{},b:{},c:{},d:{}'.format(i,a,b,c,d))
+                # print('blue i:{},da:{},db:{},dc:{},dd:{}'.format(i, da, db, dc, dd))
+                dn = 0.022#0.02135
+                if da <= dn or db<= dn or dc <= dn or dd <= dn:
+                    possession = [0, i]
+                    possession_number = possession_number + 1
+                    #print('11111111111')
+        for i in range(self.n_robots_yellow):
+            robot_distance_to_ball_edge = np.linalg.norm(np.array([robots_yellow_position[i*4],robots_yellow_position[i*4+1]]) - np.array(ball_position))
+            if robot_distance_to_ball_edge <= 0.06135:
+                possession = [1, i]
+                possession_number = possession_number + 1
+            else:
+                a = np.array([robots_yellow_position[i * 4], robots_yellow_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (-robots_yellow_position[i * 4 + 3] + robots_yellow_position[i * 4 + 2]),
+                     0.04 * (-robots_yellow_position[i * 4 + 2] - robots_yellow_position[i * 4 + 3])])
+                b = np.array([robots_yellow_position[i * 4], robots_yellow_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (robots_yellow_position[i * 4 + 3] + robots_yellow_position[i * 4 + 2]),
+                     0.04 * (robots_yellow_position[i * 4 + 2] - robots_yellow_position[i * 4 + 3])])
+                c = np.array([robots_yellow_position[i * 4], robots_yellow_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (robots_yellow_position[i * 4 + 3] - robots_yellow_position[i * 4 + 2]),
+                     0.04 * (robots_yellow_position[i * 4 + 2] + robots_yellow_position[i * 4 + 3])])
+                d = np.array([robots_yellow_position[i * 4], robots_yellow_position[i * 4 + 1]]) + np.array(
+                    [0.04 * (-robots_yellow_position[i * 4 + 3] - robots_yellow_position[i * 4 + 2]),
+                     0.04 * (-robots_yellow_position[i * 4 + 2] + robots_yellow_position[i * 4 + 3])])
+                da = np.linalg.norm(np.array(ball_position) - a)
+                db = np.linalg.norm(np.array(ball_position) - b)
+                dc = np.linalg.norm(np.array(ball_position) - c)
+                dd = np.linalg.norm(np.array(ball_position) - d)
+                dn = 0.022#0.02135
+                if da <= dn or db<= dn or dc <= dn or dd <= dn:
+                    possession = [1, i]
+                    possession_number = possession_number + 1
+                    #print('222222222')
+        if possession_number > 1:
+            possession = [-1, -1]
+        if possession_number == 0 and self.last_possession[0] != -1:
+            possession = self.last_possession
+        self.last_possession = possession
+        #print(possession_number)
+        #print(possession)
+        return possession
+
+
+    # def robot_distance_to_ball(self, robot_and_team_id):
+    #     '''
+    #     robot_and_team_id: [team_id, robot_id]
+    #     team_id:
+    #     0: blue team
+    #     1: yellow team
+    #     robot_id:
+    #     0: id 0 robot
+    #     1: id 1 robot
+    #     2: id 2 robot
+    #     '''
+    #     ball_position = []
+    #     ball_position.append(self.frame.ball.x)
+    #     ball_position.append(self.frame.ball.y)
+    #     robot_position = [] #[X, Y, sin(theta), cos(theta)]
+    #     if robot_and_team_id[0] == 0:
+    #         robot_position.append(self.frame.robots_blue[robot_and_team_id[1]].x)
+    #         robot_position.append(self.frame.robots_blue[robot_and_team_id[1]].y)
+    #         robot_position.append(np.sin(np.deg2rad(self.frame.robots_blue[robot_and_team_id[1]].theta)))
+    #         robot_position.append(np.cos(np.deg2rad(self.frame.robots_blue[robot_and_team_id[1]].theta)))
+    #     if robot_and_team_id[0] == 1:
+    #         robot_position.append(self.frame.robots_yellow[robot_and_team_id[1]].x)
+    #         robot_position.append(self.frame.robots_yellow[robot_and_team_id[1]].y)
+    #         robot_position.append(np.sin(np.deg2rad(self.frame.robots_yellow[robot_and_team_id[1]].theta)))
+    #         robot_position.append(np.cos(np.deg2rad(self.frame.robots_yellow[robot_and_team_id[1]].theta)))
+    #
+    #     A1 = robot_position[2] / robot_position[3]
+    #     B1 = -1
+    #     C1 = robot_position[1] - ((robot_position[2] * robot_position[0]) / robot_position[3]) - (0.04 / robot_position[3])
+    #
+    #     A2 = robot_position[2] / robot_position[3]
+    #     B2 = -1
+    #     C2 = robot_position[1] - ((robot_position[2] * robot_position[0]) / robot_position[3]) + (0.04 / robot_position[3])
+    #
+    #     A3 = -(robot_position[3] / robot_position[2])
+    #     B3 = -1
+    #     C3 = robot_position[1] + ((robot_position[3] * robot_position[0]) / robot_position[2]) - (0.04 / robot_position[2])
+    #
+    #     A4 = -(robot_position[3] / robot_position[2])
+    #     B4 = -1
+    #     C4 = robot_position[1] + ((robot_position[3] * robot_position[0]) / robot_position[2]) - (0.04 / robot_position[2])
+    #
+    #     distance = -1
+    #     # if robot_and_team_id[0]==0 and robot_and_team_id[1]==0:
+    #     #     print('&&&&&&&&&&&&&&')
+    #     #     # print('y4: >=0')
+    #     #     # print(((A4 * ball_position[0]) / B4) + ball_position[1] + (C4 / B4))
+    #     #     # print('y2: <=0')
+    #     #     # print(((A2 * ball_position[0]) / B2) + ball_position[1] + (C2 / B2))
+    #     #     # print('y1: >=0')
+    #     #     # print(((A1 * ball_position[0]) / B1) + ball_position[1] + (C1 / B1))
+    #     #     print(self.frame.robots_blue[0].theta)
+    #     if A1 * ball_position[0] + C1 + 0.042 >= ball_position[1] and \
+    #         A3 * ball_position[0] + C3 - 0.042 <= ball_position[1] and \
+    #         A4 * ball_position[0] + C4 + 0.042 >= ball_position[1]:
+    #         print('distance to y1,id:{}'.format(robot_and_team_id))
+    #         distance = (np.abs(A1 * ball_position[0] + B1 * ball_position[1] + C1)) / (np.sqrt(A1**2 + B1**2))
+    #
+    #     if A3 * ball_position[0] + C3 + 0.042 >= ball_position[1] and \
+    #         A2 * ball_position[0] + C2 + 0.042 >= ball_position[1] and \
+    #         A1 * ball_position[0] + C1 - 0.042 <= ball_position[1]:
+    #         print('distance to y3,id:{}'.format(robot_and_team_id))
+    #         distance = (np.abs(A3 * ball_position[0] + B3 * ball_position[1] + C3))/ (np.sqrt(A3**2 + B3**2))
+    #
+    #     if A2 * ball_position[0] + C2 - 0.042 <= ball_position[1] and \
+    #         A3 * ball_position[0] + C3 - 0.042 <= ball_position[1] and \
+    #         A4 * ball_position[0] + C4 + 0.042 >= ball_position[1]:
+    #         print('distance to y2,id:{}'.format(robot_and_team_id))
+    #         distance = (np.abs(A2 * ball_position[0] + B2 * ball_position[1] + C2)) / (np.sqrt(A2**2 + B2**2))
+    #
+    #     if A4 * ball_position[0] + C4 - 0.042 <= ball_position[1] and \
+    #         A2 * ball_position[0] + C2 + 0.042 >= ball_position[1] and \
+    #         A1 * ball_position[0] + C1 - 0.042 <= ball_position[1]:
+    #         print('distance to y4,id:{}'.format(robot_and_team_id))
+    #         distance = (np.abs(A4 * ball_position[0] + B4 * ball_position[1] + C4)) / (np.sqrt(A4**2 + B4**2))
+    #
+    #     return distance
+    #
+    # def ball_possession(self):
+    #     '''
+    #     return [team_id, robot_id]
+    #     team_id:
+    #     0: blue team
+    #     1: yellow team
+    #     -1: no team possesses the ball
+    #     robot_id:
+    #     0: id 0 robot
+    #     1: id 1 robot
+    #     2: id 2 robot
+    #     -1: no robot possesses the ball
+    #     '''
+    #     possession = [-1, -1]
+    #     possession_number = 0
+    #
+    #     for i in range(3):
+    #         robot_and_team_id = [0, i]
+    #         distance = self.robot_distance_to_ball(robot_and_team_id)
+    #         if distance <= 0.02135 and distance > 0:#0.02135
+    #             possession = [0, i]
+    #             possession_number = possession_number + 1
+    #     for i in range(3):
+    #         robot_and_team_id = [1, i]
+    #         distance = self.robot_distance_to_ball(robot_and_team_id)
+    #         if distance <= 0.02135 and distance > 0:#0.02135
+    #             possession = [1, i]
+    #             possession_number = possession_number + 1
+    #
+    #     if possession_number > 1:
+    #         possession = [-1, -1]
+    #     if possession_number == 0 and self.last_possession[0] != -1:
+    #         possession = self.last_possession
+    #
+    #     self.last_possession = possession
+    #     print('possession:{}'.format(possession))
+    #     return possession
+
 
 
 class VSSMAOpp(VSSMAEnv):
