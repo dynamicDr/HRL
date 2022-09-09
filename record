@@ -31,8 +31,17 @@ match 11 num16 5547k vs matd3 2323k multi attacker
 match 12 num16 5547k vs matd3 2323k multi attacker(same to 11)
 match 13 num16 5547k vs matd3 2323k multi attacker(same to 13)
 
-match 15 num16 5547k vs matd3 4953k multi attacker
+match 15 num16 5547k vs matd3 4953k multi attacker -90
 match 16 num16 5547k vs matd3 4953k multi attacker(same to 15)
 match 17 num16 5547k vs matd3 4953k multi attacker(same to 15)
 
-match 18: num6 4094k vs matd3 4953k multi attacker[]
+match 18: num6 4094k vs matd3 4953k multi attacker[] -50
+
+match 19 num16 5547k vs matd3 4953k single attacker
+
+match 20 num16 5547k vs matd3 4953k all attacker
+
+match 21: num6 4094k vs matd3 4953k multi all attacker
+
+match 22 test kpi
+match 23 test mode 3

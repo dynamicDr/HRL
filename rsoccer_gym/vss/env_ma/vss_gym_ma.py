@@ -3,7 +3,7 @@ import math
 import os
 import pickle
 import random
-from typing import Dict
+from typing import Dict, List
 
 import gym
 import numpy as np
@@ -80,30 +80,36 @@ class VSSMAEnv(VSSBaseEnv):
         # Initialize Class Atributes
         self.previous_ball_potential = None
         self.actions: Dict = None
-        self.reward_shaping_total = None
+        self.info = None
         self.individual_reward = {}
         self.v_wheel_deadzone = 0.05
         self.observation = None
         self.ou_actions = []
         self.goal = [[0, 0], [0, 0]]
-        self.attacker = [0]
-        self.defender_1 = 1
-        self.defender_2 = 2
+        self.attacker = [0,1,2]
+        self.defender_1 = 0
+        self.defender_2 = 0
         self.writer = None
         for i in range(self.n_robots_blue + self.n_robots_yellow):
             self.ou_actions.append(
                 OrnsteinUhlenbeckAction(self.action_space, dt=self.time_step)
             )
-        self.multiple_attacker_mode = True
+
+        # single attacker = 0
+        # defenfer will be attacker when reach goal = 1
+        # three attacker =2
+        # three attacker when yellow control the ball, one attacker when blue control the ball = 3
+
+        self.multiple_attacker_mode = 3
 
         # -------------------------------------Evaluation------------------------------------------------------------
-        self.last_possession = [-1, -1]
+        self.possession = [-1, -1]
 
         print('Environment initialized')
 
     def reset(self):
         self.actions = None
-        self.reward_shaping_total = None
+        self.info = None
         self.previous_ball_potential = None
         self.individual_reward = {}
         for ou in self.ou_actions:
@@ -125,15 +131,67 @@ class VSSMAEnv(VSSBaseEnv):
         return robot_distance_to_target<0.1
 
     def step(self, action):
-        observation, reward, done, _ = super().step(action)
-        if self.multiple_attacker_mode:
+        self.steps += 1
+        # Join agent action with environment actions
+        commands: List[Robot] = self._get_commands(action)
+        # Send command to simulator
+        self.rsim.send_commands(commands)
+        self.sent_commands = commands
+
+        # Get Frame from simulator
+        self.last_frame = self.frame
+        self.frame = self.rsim.get_frame()
+
+        if self.info is None:
+            self.info = {'goal_score': 0, 'ball_grad': 0,
+                         'goals_blue': 0, 'goals_yellow': 0}
+
+        intercept = 0
+        # 0 no change
+        # 1 blue overtake yellow
+        # -1 yellow overtake blue
+        passing = 0
+        # 0 no pass
+        # 1 blue pass
+        # -1 yellow pass
+
+        last_possession_team = copy.deepcopy(self.possession[0])
+        last_possession_robot = copy.deepcopy(self.possession[1])
+        new_possession_team = self.ball_possession()[0]
+        new_possession_robot = self.ball_possession()[1]
+        if last_possession_team != 0 and new_possession_team == 0:
+            intercept = 1
+        elif last_possession_team != 1 and new_possession_team == 1:
+            intercept = -1
+
+        if last_possession_team == 0 and new_possession_team == 0 and last_possession_robot !=new_possession_robot:
+            passing = 1
+        elif last_possession_team == 1 and new_possession_team == 1 and last_possession_robot !=new_possession_robot:
+            passing = -1
+
+        self.info["possession_team"] = self.possession[0]
+        self.info["possession_robot_idx"] = self.possession[1]
+        self.info["intercept"] = intercept
+        self.info["passing"] = passing
+
+        if self.multiple_attacker_mode == 3:
+            if intercept == 1:
+                self.attacker = [self.possession[1]]
+                self.defender_1 = self._get_closet_robot_idx(self.goal[0], "blue", except_idx=self.attacker[0])
+                for i in range(self.n_robots_control):
+                    if i != self.attacker[0] and i != self.defender_1:
+                        self.defender_2 = i
+            elif intercept == -1:
+                self.attacker = [i for i in range(self.n_robots_blue)]
+
+        if self.multiple_attacker_mode == 1:
             if self.defender_1 not in self.attacker:
-                if self.reach_goal(self.defender_1, "blue",self.goal[0]):
+                if self.reach_goal(self.defender_1, "blue", self.goal[0]):
                     self.attacker.append(self.defender_1)
             if self.defender_2 not in self.attacker:
-                if self.reach_goal(self.defender_2,  "blue",self.goal[1]):
+                if self.reach_goal(self.defender_2, "blue", self.goal[1]):
                     self.attacker.append(self.defender_2)
-        # print(self.attacker)
+
         for i in range(2):
             robot = Robot()
             robot.id = i
@@ -141,17 +199,26 @@ class VSSMAEnv(VSSBaseEnv):
             robot.y = self.goal[i][1]
             robot.theta = 0
             self.frame.robots_blue_goal[robot.id] = robot
-        # print(f"{self.attacker},{self.defender_1},{self.defender_2}")
 
-        return observation, reward, done, self.reward_shaping_total
+        # Calculate environment observation, reward and done condition
+        observation = self._frame_to_observations()
+        reward, done = self._calculate_reward_and_done()
+        # print(f"attaker={self.attacker}, def1= {self.defender_1}, def2={self.defender_2}")
+
+        return observation, reward, done, self.info
 
     def set_attacker_and_goal(self, goal):
         self.goal = goal
-        self.attacker = [self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y], "blue")]
-        self.defender_1 = self._get_closet_robot_idx(goal[0], "blue", except_idx=self.attacker[0])
-        for i in range(self.n_robots_control):
-            if i != self.attacker[0] and i != self.defender_1:
-                self.defender_2 = i
+        if self.multiple_attacker_mode == 2:
+            self.attacker = [0,1,2]
+        elif self.multiple_attacker_mode == 3:
+            pass
+        else:
+            self.attacker = [self._get_closet_robot_idx([self.frame.ball.x, self.frame.ball.y], "blue")]
+            self.defender_1 = self._get_closet_robot_idx(goal[0], "blue", except_idx=self.attacker[0])
+            for i in range(self.n_robots_control):
+                if i != self.attacker[0] and i != self.defender_1:
+                    self.defender_2 = i
         self._frame_to_observations()
 
     def get_rotated_obs(self):
@@ -253,6 +320,8 @@ class VSSMAEnv(VSSBaseEnv):
         return commands
 
     def _calculate_reward_and_done(self):
+
+
         reward = {f'robot_{i}': 0 for i in range(self.n_robots_control)}
         done = False
         # for agent
@@ -262,23 +331,22 @@ class VSSMAEnv(VSSBaseEnv):
         w_speed = 0.5  # 0 or -1
         w_goal = 50
 
-        if self.reward_shaping_total is None:
-            self.reward_shaping_total = {'goal_score': 0, 'ball_grad': 0,
-                                         'goals_blue': 0, 'goals_yellow': 0}
+
+
         if len(self.individual_reward) == 0:
             for i in range(self.n_robots_control):
                 self.individual_reward[f'robot_{i}'] = {'move': 0, 'energy': 0, 'speed': 0}
 
         # Check if goal
         if self.frame.ball.x > (self.field.length / 2):
-            self.reward_shaping_total['goal_score'] += 1
-            self.reward_shaping_total['goals_blue'] += 1
+            self.info['goal_score'] += 1
+            self.info['goals_blue'] += 1
             for i in range(self.n_robots_control):
                 reward[f'robot_{i}'] = w_goal * 1
             done = True
         elif self.frame.ball.x < -(self.field.length / 2):
-            self.reward_shaping_total['goal_score'] -= 1
-            self.reward_shaping_total['goals_yellow'] += 1
+            self.info['goal_score'] -= 1
+            self.info['goals_yellow'] += 1
             for i in range(self.n_robots_control):
                 reward[f'robot_{i}'] = w_goal * -1
             done = True
@@ -288,7 +356,7 @@ class VSSMAEnv(VSSBaseEnv):
                 grad_ball_potential, closest_move, move_reward, energy_penalty, speed_penalty = 0, 0, 0, 0, 0
                 # Calculate ball potential
                 grad_ball_potential = self._ball_grad()
-                self.reward_shaping_total['ball_grad'] = w_ball_grad * grad_ball_potential  # noqa
+                self.info['ball_grad'] = w_ball_grad * grad_ball_potential  # noqa
                 dead_robot_count = 0
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
@@ -336,7 +404,7 @@ class VSSMAEnv(VSSBaseEnv):
             return
         if self.writer is None:
             self.writer = writer
-        self.writer.add_scalar(f'Ball Grad Reward', self.reward_shaping_total['ball_grad'], global_step=step_num)
+        self.writer.add_scalar(f'Ball Grad Reward', self.info['ball_grad'], global_step=step_num)
         for idx in range(self.n_robots_control):
             self.writer.add_scalar(f'Agent_{idx} Move Reward', self.individual_reward[f'robot_{idx}']['move'],
                                    global_step=step_num)
@@ -583,130 +651,12 @@ class VSSMAEnv(VSSBaseEnv):
                     #print('222222222')
         if possession_number > 1:
             possession = [-1, -1]
-        if possession_number == 0 and self.last_possession[0] != -1:
-            possession = self.last_possession
-        self.last_possession = possession
+        if possession_number == 0 and self.possession[0] != -1:
+            possession = self.possession
+        self.possession = possession
         #print(possession_number)
         #print(possession)
         return possession
-
-
-    # def robot_distance_to_ball(self, robot_and_team_id):
-    #     '''
-    #     robot_and_team_id: [team_id, robot_id]
-    #     team_id:
-    #     0: blue team
-    #     1: yellow team
-    #     robot_id:
-    #     0: id 0 robot
-    #     1: id 1 robot
-    #     2: id 2 robot
-    #     '''
-    #     ball_position = []
-    #     ball_position.append(self.frame.ball.x)
-    #     ball_position.append(self.frame.ball.y)
-    #     robot_position = [] #[X, Y, sin(theta), cos(theta)]
-    #     if robot_and_team_id[0] == 0:
-    #         robot_position.append(self.frame.robots_blue[robot_and_team_id[1]].x)
-    #         robot_position.append(self.frame.robots_blue[robot_and_team_id[1]].y)
-    #         robot_position.append(np.sin(np.deg2rad(self.frame.robots_blue[robot_and_team_id[1]].theta)))
-    #         robot_position.append(np.cos(np.deg2rad(self.frame.robots_blue[robot_and_team_id[1]].theta)))
-    #     if robot_and_team_id[0] == 1:
-    #         robot_position.append(self.frame.robots_yellow[robot_and_team_id[1]].x)
-    #         robot_position.append(self.frame.robots_yellow[robot_and_team_id[1]].y)
-    #         robot_position.append(np.sin(np.deg2rad(self.frame.robots_yellow[robot_and_team_id[1]].theta)))
-    #         robot_position.append(np.cos(np.deg2rad(self.frame.robots_yellow[robot_and_team_id[1]].theta)))
-    #
-    #     A1 = robot_position[2] / robot_position[3]
-    #     B1 = -1
-    #     C1 = robot_position[1] - ((robot_position[2] * robot_position[0]) / robot_position[3]) - (0.04 / robot_position[3])
-    #
-    #     A2 = robot_position[2] / robot_position[3]
-    #     B2 = -1
-    #     C2 = robot_position[1] - ((robot_position[2] * robot_position[0]) / robot_position[3]) + (0.04 / robot_position[3])
-    #
-    #     A3 = -(robot_position[3] / robot_position[2])
-    #     B3 = -1
-    #     C3 = robot_position[1] + ((robot_position[3] * robot_position[0]) / robot_position[2]) - (0.04 / robot_position[2])
-    #
-    #     A4 = -(robot_position[3] / robot_position[2])
-    #     B4 = -1
-    #     C4 = robot_position[1] + ((robot_position[3] * robot_position[0]) / robot_position[2]) - (0.04 / robot_position[2])
-    #
-    #     distance = -1
-    #     # if robot_and_team_id[0]==0 and robot_and_team_id[1]==0:
-    #     #     print('&&&&&&&&&&&&&&')
-    #     #     # print('y4: >=0')
-    #     #     # print(((A4 * ball_position[0]) / B4) + ball_position[1] + (C4 / B4))
-    #     #     # print('y2: <=0')
-    #     #     # print(((A2 * ball_position[0]) / B2) + ball_position[1] + (C2 / B2))
-    #     #     # print('y1: >=0')
-    #     #     # print(((A1 * ball_position[0]) / B1) + ball_position[1] + (C1 / B1))
-    #     #     print(self.frame.robots_blue[0].theta)
-    #     if A1 * ball_position[0] + C1 + 0.042 >= ball_position[1] and \
-    #         A3 * ball_position[0] + C3 - 0.042 <= ball_position[1] and \
-    #         A4 * ball_position[0] + C4 + 0.042 >= ball_position[1]:
-    #         print('distance to y1,id:{}'.format(robot_and_team_id))
-    #         distance = (np.abs(A1 * ball_position[0] + B1 * ball_position[1] + C1)) / (np.sqrt(A1**2 + B1**2))
-    #
-    #     if A3 * ball_position[0] + C3 + 0.042 >= ball_position[1] and \
-    #         A2 * ball_position[0] + C2 + 0.042 >= ball_position[1] and \
-    #         A1 * ball_position[0] + C1 - 0.042 <= ball_position[1]:
-    #         print('distance to y3,id:{}'.format(robot_and_team_id))
-    #         distance = (np.abs(A3 * ball_position[0] + B3 * ball_position[1] + C3))/ (np.sqrt(A3**2 + B3**2))
-    #
-    #     if A2 * ball_position[0] + C2 - 0.042 <= ball_position[1] and \
-    #         A3 * ball_position[0] + C3 - 0.042 <= ball_position[1] and \
-    #         A4 * ball_position[0] + C4 + 0.042 >= ball_position[1]:
-    #         print('distance to y2,id:{}'.format(robot_and_team_id))
-    #         distance = (np.abs(A2 * ball_position[0] + B2 * ball_position[1] + C2)) / (np.sqrt(A2**2 + B2**2))
-    #
-    #     if A4 * ball_position[0] + C4 - 0.042 <= ball_position[1] and \
-    #         A2 * ball_position[0] + C2 + 0.042 >= ball_position[1] and \
-    #         A1 * ball_position[0] + C1 - 0.042 <= ball_position[1]:
-    #         print('distance to y4,id:{}'.format(robot_and_team_id))
-    #         distance = (np.abs(A4 * ball_position[0] + B4 * ball_position[1] + C4)) / (np.sqrt(A4**2 + B4**2))
-    #
-    #     return distance
-    #
-    # def ball_possession(self):
-    #     '''
-    #     return [team_id, robot_id]
-    #     team_id:
-    #     0: blue team
-    #     1: yellow team
-    #     -1: no team possesses the ball
-    #     robot_id:
-    #     0: id 0 robot
-    #     1: id 1 robot
-    #     2: id 2 robot
-    #     -1: no robot possesses the ball
-    #     '''
-    #     possession = [-1, -1]
-    #     possession_number = 0
-    #
-    #     for i in range(3):
-    #         robot_and_team_id = [0, i]
-    #         distance = self.robot_distance_to_ball(robot_and_team_id)
-    #         if distance <= 0.02135 and distance > 0:#0.02135
-    #             possession = [0, i]
-    #             possession_number = possession_number + 1
-    #     for i in range(3):
-    #         robot_and_team_id = [1, i]
-    #         distance = self.robot_distance_to_ball(robot_and_team_id)
-    #         if distance <= 0.02135 and distance > 0:#0.02135
-    #             possession = [1, i]
-    #             possession_number = possession_number + 1
-    #
-    #     if possession_number > 1:
-    #         possession = [-1, -1]
-    #     if possession_number == 0 and self.last_possession[0] != -1:
-    #         possession = self.last_possession
-    #
-    #     self.last_possession = possession
-    #     print('possession:{}'.format(possession))
-    #     return possession
-
 
 
 class VSSMAOpp(VSSMAEnv):
@@ -815,13 +765,13 @@ class VSSMASelfplay(VSSMAOpp):
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
-        if self.multiple_attacker_mode:
+        if self.multiple_attacker_mode == 1:
             if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
                 self.opp_attacker.append(self.opp_defender_1)
             if self.reach_goal(self.opp_defender_2,  "yellow",self.opp_goal[1]):
                 self.opp_attacker.append(self.opp_defender_2)
 
-        return observation, reward, done, self.reward_shaping_total
+        return observation, reward, done, self.info
 
     def load_opp(self):
         try:

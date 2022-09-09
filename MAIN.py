@@ -211,9 +211,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser("Hyperparameters Setting for MADDPG and MATD3 in MPE environment")
     parser.add_argument("--max_episode", type=int, default=int(1e6), help=" Maximum number of training steps")
     parser.add_argument("--episode_limit", type=int, default=300, help="Maximum number of steps per episode")  # 300
-    parser.add_argument("--evaluate_freq", type=float, default=30000,
-                        help="Evaluate the policy every 'evaluate_freq' steps")
-    parser.add_argument("--evaluate_times", type=float, default=3, help="Evaluate times")
     parser.add_argument("--max_action", type=float, default=1.0, help="Max action")
     parser.add_argument("--algorithm", type=str, default="MATD3", help="MADDPG or MATD3")
     parser.add_argument("--buffer_size", type=int, default=int(1e6), help="The capacity of the replay buffer")
@@ -231,14 +228,14 @@ if __name__ == '__main__':
     parser.add_argument("--tau", type=float, default=0.01, help="Softly update the target network")
     parser.add_argument("--use_orthogonal_init", type=bool, default=True, help="Orthogonal initialization")
     parser.add_argument("--use_grad_clip", type=bool, default=True, help="Gradient clip")
-    parser.add_argument("--save_rate", type=int, default=100,
+    parser.add_argument("--save_rate", type=int, default=5000,
                         help="Model save per n episode")
     parser.add_argument("--record_reward", type=bool, default=True, help="Record detailed reward to tensorboard")
     # --------------------------------------MATD3--------------------------------------------------------------------
     parser.add_argument("--policy_noise", type=float, default=0.2, help="Target policy smoothing")
     parser.add_argument("--noise_clip", type=float, default=0.5, help="Clip noise")
     parser.add_argument("--policy_update_freq", type=int, default=2, help="The frequency of policy updates")
-    parser.add_argument("--restore", type=bool, default=True, help="Restore from checkpoint")
+    parser.add_argument("--restore", type=bool, default=False, help="Restore from checkpoint")
     parser.add_argument("--restore_episode", type=int, default=14291, help="Restore from checkpoint")
     parser.add_argument("--restore_step", type=int, default=3649071, help="Restore from checkpoint")
 
@@ -256,7 +253,7 @@ if __name__ == '__main__':
     parser.add_argument("--coach_batch_size", type=int, default=1024, help="Batch size")
     parser.add_argument("--restore_coach", type=bool, default=True, help="Restore from checkpoint")
     parser.add_argument("--mmoe_model_load_path", type=str,
-                        default="./models/coach/moe_num_16_3627k")
+                        default="./models/coach/state_dict")
     parser.add_argument("--mmoe_model_save_path", type=str,
                         default="./models/coach/")
     # ------------------------------------- Self-play------------------------------------------------------------
@@ -271,7 +268,7 @@ if __name__ == '__main__':
     else:
         env_name = "VSSMA-v0"
     seed = 0
-    number = 17
+    number = 18
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 
