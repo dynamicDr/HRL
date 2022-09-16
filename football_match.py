@@ -19,7 +19,7 @@ from rsoccer_gym.vss.env_ma import VSSMAOpp
 
 max_match = 100
 max_match_step = 1000
-match_number = 26
+match_number = 27
 seed = 0
 display = False
 record_reward = True
@@ -51,9 +51,9 @@ torch.manual_seed(seed)
 writer = None
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_6_4094k"
-agent_model_load_path = "models/agent/actor_number_6_4094k_agent_{}.pth"
-args_load_path = "models/args/args_num6.pkl"
+mmoe_model_load_path = "models/coach/moe_num_19_6310k"
+agent_model_load_path = "models/agent/actor_number_19_6310k_agent_{}.pth"
+args_load_path = "models/args/args_num19.npy"
 
 with open(args_load_path, 'rb') as f:
     args = pickle.load(f)

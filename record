@@ -45,3 +45,6 @@ match 21: num6 4094k vs matd3 4953k multi all attacker
 
 match 22 test kpi
 match 23 test mode 3
+
+MATCH 25 num16 5547k vs matd3 4953k mode = 3
+MATCH 26 num6 4094k vs matd3 4953k mode = 3
