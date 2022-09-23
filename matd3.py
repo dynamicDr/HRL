@@ -8,12 +8,11 @@ from networks.actor_critic import Actor,Critic_MATD3
 
 
 class MATD3(object):
-    def __init__(self, args, agent_id,writer):
+    def __init__(self, args, agent_id,writer,is_hrl = True):
         self.N = args.N
         self.agent_id = agent_id
         self.max_action = args.max_action
         self.action_dim = args.action_dim_n[agent_id]
-        #self.action_dim = [2,]
         self.lr_a = args.lr_a
         self.lr_c = args.lr_c
         self.gamma = args.gamma
@@ -24,8 +23,8 @@ class MATD3(object):
         self.policy_update_freq = args.policy_update_freq
         self.actor_pointer = 0
         # Create an individual actor and critic for each agent according to the 'agent_id'
-        self.actor = Actor(args, agent_id)
-        self.critic = Critic_MATD3(args)
+        self.actor = Actor(args, agent_id,is_hrl=is_hrl)
+        self.critic = Critic_MATD3(args,is_hrl=is_hrl)
         self.actor_target = copy.deepcopy(self.actor)
         self.critic_target = copy.deepcopy(self.critic)
 
@@ -88,8 +87,10 @@ class MATD3(object):
             for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
                 target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
 
-    def save_model(self, number, total_steps, agent_id,save_path = None,save_as_opp = False):
+    def save_model(self, number, total_steps, agent_id,save_path = None,save_as_opp = False,matd3_adv = False):
         if save_as_opp:
             torch.save(self.actor.state_dict(), f"{save_path}opp_{agent_id}")
+        if matd3_adv:
+            torch.save(self.actor.state_dict(), "./models/matd3_adv/actor_number_{}_{}k_agent_{}.pth".format(number, int(total_steps / 1000), agent_id))
         else:
             torch.save(self.actor.state_dict(), "./models/agent/actor_number_{}_{}k_agent_{}.pth".format(number, int(total_steps / 1000), agent_id))

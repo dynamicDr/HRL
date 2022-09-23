@@ -1,6 +1,5 @@
 import copy
 import math
-import os
 import pickle
 import random
 from typing import Dict, List
@@ -80,13 +79,14 @@ class VSSMAEnv(VSSBaseEnv):
         # Initialize Class Atributes
         self.previous_ball_potential = None
         self.actions: Dict = None
-        self.info = None
+        self.info = {'goal_score': 0, 'ball_grad': 0,
+                     'goals_blue': 0, 'goals_yellow': 0}
         self.individual_reward = {}
         self.v_wheel_deadzone = 0.05
         self.observation = None
         self.ou_actions = []
         self.goal = [[0, 0], [0, 0]]
-        self.attacker = [0,1,2]
+        self.attacker = [0, 1, 2]
         self.defender_1 = 0
         self.defender_2 = 0
         self.writer = None
@@ -109,14 +109,15 @@ class VSSMAEnv(VSSBaseEnv):
 
     def reset(self):
         self.actions = None
-        self.info = None
+        self.info = {'goal_score': 0, 'ball_grad': 0,
+                     'goals_blue': 0, 'goals_yellow': 0}
         self.previous_ball_potential = None
         self.individual_reward = {}
         for ou in self.ou_actions:
             ou.reset()
         return super().reset()
 
-    def reach_goal(self, robot_idx,  team,target):
+    def reach_goal(self, robot_idx, team, target):
         target = np.array(target)
         if team == "blue":
             robot = np.array([self.frame.robots_blue[robot_idx].x,
@@ -128,7 +129,7 @@ class VSSMAEnv(VSSBaseEnv):
             Exception("team must be blue or yellow")
         robot_distance_to_target = np.sqrt(sum((robot - target) ** 2 for robot, target in zip(robot, target)))
 
-        return robot_distance_to_target<0.1
+        return robot_distance_to_target < 0.1
 
     def step(self, action):
         self.steps += 1
@@ -141,10 +142,6 @@ class VSSMAEnv(VSSBaseEnv):
         # Get Frame from simulator
         self.last_frame = self.frame
         self.frame = self.rsim.get_frame()
-
-        if self.info is None:
-            self.info = {'goal_score': 0, 'ball_grad': 0,
-                         'goals_blue': 0, 'goals_yellow': 0}
 
         intercept = 0
         # 0 no change
@@ -164,9 +161,9 @@ class VSSMAEnv(VSSBaseEnv):
         elif last_possession_team != 1 and new_possession_team == 1:
             intercept = -1
 
-        if last_possession_team == 0 and new_possession_team == 0 and last_possession_robot !=new_possession_robot:
+        if last_possession_team == 0 and new_possession_team == 0 and last_possession_robot != new_possession_robot:
             passing = 1
-        elif last_possession_team == 1 and new_possession_team == 1 and last_possession_robot !=new_possession_robot:
+        elif last_possession_team == 1 and new_possession_team == 1 and last_possession_robot != new_possession_robot:
             passing = -1
 
         self.info["possession_team"] = self.possession[0]
@@ -210,7 +207,7 @@ class VSSMAEnv(VSSBaseEnv):
     def set_attacker_and_goal(self, goal):
         self.goal = goal
         if self.multiple_attacker_mode == 2:
-            self.attacker = [0,1,2]
+            self.attacker = [0, 1, 2]
         elif self.multiple_attacker_mode == 3:
             pass
         else:
@@ -285,7 +282,8 @@ class VSSMAEnv(VSSBaseEnv):
                 observation.append(self.norm_pos(self.goal[1][1]))
                 observation.append(1)
             else:
-                raise Exception(f"idx{idx} is neither attacker nor defender: {self.attacker},{self.defender_1},{self.defender_2}")
+                raise Exception(
+                    f"idx{idx} is neither attacker nor defender: {self.attacker},{self.defender_1},{self.defender_2}")
             observations.append(np.array(observation, dtype=np.float32))
         # Append coach observation
         observations.append(np.array(observations[0][:40], dtype=np.float32))
@@ -321,7 +319,6 @@ class VSSMAEnv(VSSBaseEnv):
 
     def _calculate_reward_and_done(self):
 
-
         reward = {f'robot_{i}': 0 for i in range(self.n_robots_control)}
         done = False
         # for agent
@@ -330,8 +327,6 @@ class VSSMAEnv(VSSBaseEnv):
         w_energy = 2e-6
         w_speed = 0.5  # 0 or -1
         w_goal = 50
-
-
 
         if len(self.individual_reward) == 0:
             for i in range(self.n_robots_control):
@@ -412,8 +407,6 @@ class VSSMAEnv(VSSBaseEnv):
                                    global_step=step_num)
             self.writer.add_scalar(f'Agent_{idx} Speed Penalty', self.individual_reward[f'robot_{idx}']['speed'],
                                    global_step=step_num)
-
-
 
     def _get_closet_robot_idx(self, target, team, except_idx=None):
         robots_distance_to_target = {}
@@ -598,7 +591,8 @@ class VSSMAEnv(VSSBaseEnv):
 
         possession_number = 0
         for i in range(self.n_robots_blue):
-            robot_distance_to_ball_edge = np.linalg.norm(np.array([robots_blue_position[i*4],robots_blue_position[i*4+1]]) - np.array(ball_position))
+            robot_distance_to_ball_edge = np.linalg.norm(
+                np.array([robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]]) - np.array(ball_position))
             if robot_distance_to_ball_edge <= 0.06135:
                 possession = [0, i]
                 possession_number = possession_number + 1
@@ -623,13 +617,14 @@ class VSSMAEnv(VSSBaseEnv):
                 # print('blue i:{}, x:{}, y:{}'.format(i,robots_blue_position[i * 4], robots_blue_position[i * 4 + 1]))
                 # print('blue i:{},a:{},b:{},c:{},d:{}'.format(i,a,b,c,d))
                 # print('blue i:{},da:{},db:{},dc:{},dd:{}'.format(i, da, db, dc, dd))
-                dn = 0.022#0.02135
-                if da <= dn or db<= dn or dc <= dn or dd <= dn:
+                dn = 0.022  # 0.02135
+                if da <= dn or db <= dn or dc <= dn or dd <= dn:
                     possession = [0, i]
                     possession_number = possession_number + 1
-                    #print('11111111111')
+                    # print('11111111111')
         for i in range(self.n_robots_yellow):
-            robot_distance_to_ball_edge = np.linalg.norm(np.array([robots_yellow_position[i*4],robots_yellow_position[i*4+1]]) - np.array(ball_position))
+            robot_distance_to_ball_edge = np.linalg.norm(
+                np.array([robots_yellow_position[i * 4], robots_yellow_position[i * 4 + 1]]) - np.array(ball_position))
             if robot_distance_to_ball_edge <= 0.06135:
                 possession = [1, i]
                 possession_number = possession_number + 1
@@ -650,18 +645,18 @@ class VSSMAEnv(VSSBaseEnv):
                 db = np.linalg.norm(np.array(ball_position) - b)
                 dc = np.linalg.norm(np.array(ball_position) - c)
                 dd = np.linalg.norm(np.array(ball_position) - d)
-                dn = 0.022#0.02135
-                if da <= dn or db<= dn or dc <= dn or dd <= dn:
+                dn = 0.022  # 0.02135
+                if da <= dn or db <= dn or dc <= dn or dd <= dn:
                     possession = [1, i]
                     possession_number = possession_number + 1
-                    #print('222222222')
+                    # print('222222222')
         if possession_number > 1:
             possession = [-1, -1]
         if possession_number == 0 and self.possession[0] != -1:
             possession = self.possession
         self.possession = possession
-        #print(possession_number)
-        #print(possession)
+        # print(possession_number)
+        # print(possession)
         return possession
 
 
@@ -772,9 +767,9 @@ class VSSMASelfplay(VSSMAOpp):
     def step(self, action):
         observation, reward, done, _ = super().step(action)
         if self.multiple_attacker_mode == 1:
-            if self.reach_goal(self.opp_defender_1, "yellow",self.opp_goal[0]):
+            if self.reach_goal(self.opp_defender_1, "yellow", self.opp_goal[0]):
                 self.opp_attacker.append(self.opp_defender_1)
-            if self.reach_goal(self.opp_defender_2,  "yellow",self.opp_goal[1]):
+            if self.reach_goal(self.opp_defender_2, "yellow", self.opp_goal[1]):
                 self.opp_attacker.append(self.opp_defender_2)
 
         return observation, reward, done, self.info
@@ -871,20 +866,28 @@ class VSSMASelfplay(VSSMAOpp):
                 self.opp_defender_2 = i
 
 
-class VSSMABoth(VSSMAEnv):
+class VSSMAAdv(VSSMAEnv):
     def __init__(self, n_robots_control=3):
         super().__init__(n_robots_control=n_robots_control)
         self.args = None
         self.opps = []
         self.opp_obs = None
         self.opp_action = None
+    def reset(self):
+        obs = super().reset()
+        self._opp_obs()
+        return obs
 
-    def set_opp(self,agents):
+    def set_opp(self, agents):
         self.opps = agents
 
     def step(self, action):
-        observation, reward, done, _ = super().step(self, action)
-        self.info["opp_agent_r_n"] = list(self._calculate_opp_reward(done,self.info["goals_blue"] == 1).values())
+        observation, reward, done, _ = super().step(action)
+        goal_blue = False
+        if "goals_blue" in self.info.keys():
+            if self.info["goals_blue"] == 1:
+                goal_blue = True
+        self.info["opp_agent_r_n"] = list(self._calculate_opp_reward(done, goal_blue).values())
         return observation, reward, done, self.info
 
     def _opp_obs(self):
@@ -960,7 +963,7 @@ class VSSMABoth(VSSMAEnv):
         self.info["opp_a_n"] = opp_actions
         return commands
 
-    def _calculate_opp_reward(self,done,blue_goal=False):
+    def _calculate_opp_reward(self, done, blue_goal=False):
 
         reward = {f'robot_{i}': 0 for i in range(self.n_robots_control)}
         # for agent
@@ -985,7 +988,7 @@ class VSSMABoth(VSSMAEnv):
                 grad_ball_potential = -self._ball_grad()
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
-                    if w_move!=0:
+                    if w_move != 0:
                         move_target = [self.frame.ball.x, self.frame.ball.y]
                         move_reward = self._move_reward(idx, move_target, color="yellow")
 
@@ -1010,6 +1013,8 @@ class VSSMABoth(VSSMAEnv):
 
                     reward[f'robot_{idx}'] = rew
         return reward
+
+
 if __name__ == '__main__':
     env = VSSMAEnv()
     print(env.n_robots_yellow)

@@ -7,7 +7,6 @@ import gym
 import numpy as np
 import pandas as pd
 import torch
-from tensorboardX import SummaryWriter
 
 from coach_mmoe import Coach_MMOE
 from match_result.plot import match_plot
@@ -161,16 +160,16 @@ for match in range(max_match):
                     goal_step = 0
         if info["goal_score"] == 1:
             match_dict["blue_score"] += 1
-            overall_performance +=1
+            overall_performance += 1
         elif info["goal_score"] == -1:
             match_dict["yellow_score"] += 1
-            overall_performance-=1
+            overall_performance -= 1
     df = df.append(pd.Series(match_dict), ignore_index=True)
 env.close()
 
 folder = f"match_result/{match_number}_{datetime.datetime.now()}"
 os.mkdir(folder)
-match_plot(df,folder)
+match_plot(df, folder)
 
-df.to_csv(f"{folder}/{match_number}.csv",index=False)
+df.to_csv(f"{folder}/{match_number}.csv", index=False)
 print(overall_performance)

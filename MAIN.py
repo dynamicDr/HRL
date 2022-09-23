@@ -268,7 +268,7 @@ if __name__ == '__main__':
     else:
         env_name = "VSSMA-v0"
     seed = 0
-    number = 19
+    number = 999
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 

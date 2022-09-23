@@ -13,16 +13,16 @@ def orthogonal_init(layer, gain=1.0):
 
 # Different agents have different observation dimensions and action dimensions, so we need to use 'agent_id' to distinguish them
 class Actor(nn.Module):
-    def __init__(self, args, agent_id, is_coach=False):
+    def __init__(self, args, agent_id, is_hrl=True):
         super(Actor, self).__init__()
-        if is_coach:
-            self.max_action = args.coach_max_action
-            obs_dim = args.coach_obs_dim
-            hidden_dim = args.coach_hidden_dim
-            action_dim = args.coach_action_dim
-        else:
+        if is_hrl:
             self.max_action = args.max_action
             obs_dim = args.obs_dim_n[agent_id]
+            hidden_dim = args.hidden_dim
+            action_dim = args.action_dim_n[agent_id]
+        else:
+            self.max_action = args.max_action
+            obs_dim = args.obs_dim_n[agent_id]-3
             hidden_dim = args.hidden_dim
             action_dim = args.action_dim_n[agent_id]
         self.fc1 = nn.Linear(obs_dim, hidden_dim)
@@ -66,19 +66,15 @@ class Critic_MADDPG(nn.Module):
 
 
 class Critic_MATD3(nn.Module):
-    def __init__(self, args, is_coach=False):
-        self.is_coach = is_coach
+    def __init__(self, args, is_hrl=True):
         super(Critic_MATD3, self).__init__()
-        if self.is_coach:
-            self.max_action = args.coach_max_action
-            obs_dim = args.coach_obs_dim
-            hidden_dim = args.coach_hidden_dim
-            action_dim = args.coach_action_dim
-        else:
-            self.max_action = args.max_action
+        self.max_action = args.max_action
+        if is_hrl:
             obs_dim = sum(args.obs_dim_n)
-            hidden_dim = args.hidden_dim
-            action_dim = sum(args.action_dim_n)
+        else:
+            obs_dim = sum(args.obs_dim_n)-3*3
+        hidden_dim = args.hidden_dim
+        action_dim = sum(args.action_dim_n)
         self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         self.fc3 = nn.Linear(hidden_dim, 1)
@@ -95,12 +91,10 @@ class Critic_MATD3(nn.Module):
             orthogonal_init(self.fc6)
 
     def forward(self, s, a):
-        if self.is_coach:
-            s_a = torch.cat([s, a], dim=1)
-        else:
-            s = torch.cat(s, dim=1)
-            a = torch.cat(a, dim=1)
-            s_a = torch.cat([s, a], dim=1)
+
+        s = torch.cat(s, dim=1)
+        a = torch.cat(a, dim=1)
+        s_a = torch.cat([s, a], dim=1)
 
         q1 = F.relu(self.fc1(s_a))
         q1 = F.relu(self.fc2(q1))
@@ -112,12 +106,9 @@ class Critic_MATD3(nn.Module):
         return q1, q2
 
     def Q1(self, s, a):
-        if self.is_coach:
-            s_a = torch.cat([s, a], dim=1)
-        else:
-            s = torch.cat(s, dim=1)
-            a = torch.cat(a, dim=1)
-            s_a = torch.cat([s, a], dim=1)
+        s = torch.cat(s, dim=1)
+        a = torch.cat(a, dim=1)
+        s_a = torch.cat([s, a], dim=1)
         q1 = F.relu(self.fc1(s_a))
         q1 = F.relu(self.fc2(q1))
         q1 = self.fc3(q1)
