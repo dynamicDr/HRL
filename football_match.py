@@ -31,6 +31,7 @@ save_rate = 100  # save online trained coach per n episode
 
 multi_attacker_mode = 3
 
+overall_performance = 0
 # =====================================================
 
 if display:
@@ -51,8 +52,8 @@ torch.manual_seed(seed)
 writer = None
 
 # Load players
-mmoe_model_load_path = "models/coach/moe_num_19_6310k"
-agent_model_load_path = "models/agent/actor_number_19_6310k_agent_{}.pth"
+mmoe_model_load_path = "models/coach/moe_num_19_11331k"
+agent_model_load_path = "models/agent/actor_number_19_11331k_agent_{}.pth"
 args_load_path = "models/args/args_num19.npy"
 
 with open(args_load_path, 'rb') as f:
@@ -160,9 +161,10 @@ for match in range(max_match):
                     goal_step = 0
         if info["goal_score"] == 1:
             match_dict["blue_score"] += 1
+            overall_performance +=1
         elif info["goal_score"] == -1:
             match_dict["yellow_score"] += 1
-
+            overall_performance-=1
     df = df.append(pd.Series(match_dict), ignore_index=True)
 env.close()
 
@@ -171,3 +173,4 @@ os.mkdir(folder)
 match_plot(df,folder)
 
 df.to_csv(f"{folder}/{match_number}.csv",index=False)
+print(overall_performance)

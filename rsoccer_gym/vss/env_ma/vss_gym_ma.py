@@ -530,7 +530,7 @@ class VSSMAEnv(VSSBaseEnv):
 
         return grad_ball_potential
 
-    def _move_reward(self, robot_idx, target):
+    def _move_reward(self, robot_idx, target, color="blue"):
         '''Calculate Move to ball reward
 
         Cosine between the robot vel vector and the vector robot -> ball.
@@ -538,10 +538,16 @@ class VSSMAEnv(VSSBaseEnv):
         '''
 
         target = np.array(target)
-        robot = np.array([self.frame.robots_blue[robot_idx].x,
-                          self.frame.robots_blue[robot_idx].y])
-        robot_vel = np.array([self.frame.robots_blue[robot_idx].v_x,
-                              self.frame.robots_blue[robot_idx].v_y])
+        if color == "blue":
+            robot = np.array([self.frame.robots_blue[robot_idx].x,
+                              self.frame.robots_blue[robot_idx].y])
+            robot_vel = np.array([self.frame.robots_blue[robot_idx].v_x,
+                                  self.frame.robots_blue[robot_idx].v_y])
+        else:
+            robot = np.array([self.frame.robots_yellow[robot_idx].x,
+                              self.frame.robots_yellow[robot_idx].y])
+            robot_vel = np.array([self.frame.robots_yellow[robot_idx].v_x,
+                                  self.frame.robots_yellow[robot_idx].v_y])
         robot_ball = target - robot
         robot_ball = robot_ball / np.linalg.norm(robot_ball)
 
@@ -864,6 +870,146 @@ class VSSMASelfplay(VSSMAOpp):
             if i != self.opp_attacker[0] and i != self.opp_defender_1:
                 self.opp_defender_2 = i
 
+
+class VSSMABoth(VSSMAEnv):
+    def __init__(self, n_robots_control=3):
+        super().__init__(n_robots_control=n_robots_control)
+        self.args = None
+        self.opps = []
+        self.opp_obs = None
+        self.opp_action = None
+
+    def set_opp(self,agents):
+        self.opps = agents
+
+    def step(self, action):
+        observation, reward, done, _ = super().step(self, action)
+        self.info["opp_agent_r_n"] = list(self._calculate_opp_reward(done,self.info["goals_blue"] == 1).values())
+        return observation, reward, done, self.info
+
+    def _opp_obs(self):
+        observation = []
+        observation.append(self.norm_pos(-self.frame.ball.x))
+        observation.append(self.norm_pos(self.frame.ball.y))
+        observation.append(self.norm_v(-self.frame.ball.v_x))
+        observation.append(self.norm_v(self.frame.ball.v_y))
+
+        #  we reflect the side that the opp is attacking,
+        #  so that he will attack towards the goal where the goalkeeper is
+        for i in range(self.n_robots_yellow):
+            observation.append(self.norm_pos(-self.frame.robots_yellow[i].x))
+            observation.append(self.norm_pos(self.frame.robots_yellow[i].y))
+
+            observation.append(
+                np.sin(np.deg2rad(self.frame.robots_yellow[i].theta))
+            )
+            observation.append(
+                -np.cos(np.deg2rad(self.frame.robots_yellow[i].theta))
+            )
+            observation.append(self.norm_v(-self.frame.robots_yellow[i].v_x))
+            observation.append(self.norm_v(self.frame.robots_yellow[i].v_y))
+
+            observation.append(self.norm_w(-self.frame.robots_yellow[i].v_theta))
+
+        for i in range(self.n_robots_blue):
+            observation.append(self.norm_pos(-self.frame.robots_blue[i].x))
+            observation.append(self.norm_pos(self.frame.robots_blue[i].y))
+            observation.append(self.norm_v(-self.frame.robots_blue[i].v_x))
+            observation.append(self.norm_v(self.frame.robots_blue[i].v_y))
+            observation.append(self.norm_w(-self.frame.robots_blue[i].v_theta))
+
+        # get rotated
+        observations = []
+        observations.append(observation)
+        player_0 = copy.deepcopy(observation[4 + (7 * 0): 11 + (7 * 0)])
+        player_1 = copy.deepcopy(observation[4 + (7 * 1): 11 + (7 * 1)])
+        player_2 = copy.deepcopy(observation[4 + (7 * 2): 11 + (7 * 2)])
+        observation_1 = copy.deepcopy(observation)
+        observation_1[4 + (7 * 0): 11 + (7 * 0)] = player_1
+        observation_1[4 + (7 * 1): 11 + (7 * 1)] = player_0
+        observations.append(observation_1)
+        observation_2 = copy.deepcopy(observation)
+        observation_2[4 + (7 * 0): 11 + (7 * 0)] = player_2
+        observation_2[4 + (7 * 2): 11 + (7 * 2)] = player_0
+        observations.append(observation_2)
+        observations = np.array(observations, dtype=np.float32)
+        self.opp_obs = observations
+        return observations
+
+    def _get_commands(self, actions):
+        commands = []
+        self.actions = {}
+
+        for i in range(self.n_robots_blue):
+            self.actions[i] = actions[i]
+            v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions[i])
+            commands.append(Robot(yellow=False, id=i, v_wheel0=v_wheel0,
+                                  v_wheel1=v_wheel1))
+        self.opp_obs = self._opp_obs()
+        opp_actions = []
+        for i in range(self.n_robots_yellow):
+            if len(self.opps) != 0:
+                a = self.opps[i].choose_action(self.opp_obs[i], noise_std=0)
+                opp_action = copy.deepcopy(a)
+            else:
+                opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
+            opp_actions.append(opp_action)
+            v_wheel1, v_wheel0 = self._actions_to_v_wheels(opp_action)
+            commands.append(Robot(yellow=True, id=i, v_wheel0=v_wheel0,
+                                  v_wheel1=v_wheel1))
+        self.info["opp_a_n"] = opp_actions
+        return commands
+
+    def _calculate_opp_reward(self,done,blue_goal=False):
+
+        reward = {f'robot_{i}': 0 for i in range(self.n_robots_control)}
+        # for agent
+        w_move = 0.2  # [-5,5]
+        w_ball_grad = 0.8  # [-5,5]
+        w_energy = 2e-6
+        w_speed = 0.5  # 0 or -1
+        w_goal = 50
+
+        if done:
+            if blue_goal:
+                for i in range(self.n_robots_control):
+                    reward[f'robot_{i}'] = w_goal * -1
+            else:
+                for i in range(self.n_robots_control):
+                    reward[f'robot_{i}'] = w_goal * 1
+        else:
+            # if not goal
+            if self.last_frame is not None:
+                grad_ball_potential, closest_move, move_reward, energy_penalty, speed_penalty = 0, 0, 0, 0, 0
+                # Calculate ball potential
+                grad_ball_potential = -self._ball_grad()
+                for idx in range(self.n_robots_control):
+                    # Calculate Move reward
+                    if w_move!=0:
+                        move_target = [self.frame.ball.x, self.frame.ball.y]
+                        move_reward = self._move_reward(idx, move_target, color="yellow")
+
+                    # Calculate Energy penalty
+                    if w_energy != 0:
+                        energy_penalty = self._energy_penalty(robot_idx=idx)
+
+                    # Calculate speed penalty
+                    if w_speed != 0:
+                        speed_dead_zone = 0.1
+                        speed_x = self.observation[0][27 + (5 * idx)]
+                        speed_y = self.observation[0][28 + (5 * idx)]
+                        speed_abs = math.sqrt(math.pow(speed_x, 2) + math.pow(speed_y, 2))
+                        speed_penalty = 0
+                        if speed_abs <= speed_dead_zone:
+                            speed_penalty = -1
+
+                    rew = w_ball_grad * grad_ball_potential + \
+                          w_move * move_reward + \
+                          w_energy * energy_penalty + \
+                          w_speed * speed_penalty
+
+                    reward[f'robot_{idx}'] = rew
+        return reward
 if __name__ == '__main__':
     env = VSSMAEnv()
     print(env.n_robots_yellow)
