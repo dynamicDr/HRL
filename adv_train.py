@@ -118,7 +118,7 @@ class Runner:
                         self.agent_n[agent_id].train(self.replay_buffer, self.agent_n)
                         self.opp_agent_n[agent_id].train(self.opp_replay_buffer, self.opp_agent_n)
                     # Update opp in env
-                    self.env.set_opp(self.opp_agent_n)
+                    self.env.set_opp(self.opp_agent_n,self.noise_std)
 
                 if episode_step >= self.args.episode_limit:
                     terminate = True
@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     env_name = "VSSMAAdv-v0"
     seed = 0
-    number = 20
+    number = 21
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 

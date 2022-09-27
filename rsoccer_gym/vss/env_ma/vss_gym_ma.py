@@ -79,7 +79,7 @@ class VSSMAEnv(VSSBaseEnv):
         # Initialize Class Atributes
         self.previous_ball_potential = None
         self.actions: Dict = None
-        self.info = {'goal_score': 0, 'ball_grad': 0,
+        self.info = {'goal_score': 0, 'ball_grad': 0,'ball_grad_opp': 0,
                      'goals_blue': 0, 'goals_yellow': 0}
         self.individual_reward = {}
         self.v_wheel_deadzone = 0.05
@@ -330,7 +330,8 @@ class VSSMAEnv(VSSBaseEnv):
 
         if len(self.individual_reward) == 0:
             for i in range(self.n_robots_control):
-                self.individual_reward[f'robot_{i}'] = {'move': 0, 'energy': 0, 'speed': 0}
+                self.individual_reward[f'blue_robot_{i}'] = {'move': 0, 'energy': 0, 'speed': 0}
+                self.individual_reward[f'yellow_robot_{i}'] = {'move': 0, 'energy': 0, 'speed': 0}
 
         # Check if goal
         if self.frame.ball.x > (self.field.length / 2):
@@ -352,7 +353,6 @@ class VSSMAEnv(VSSBaseEnv):
                 # Calculate ball potential
                 grad_ball_potential = self._ball_grad()
                 self.info['ball_grad'] = w_ball_grad * grad_ball_potential  # noqa
-                dead_robot_count = 0
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
                     if w_move != 0:
@@ -385,13 +385,10 @@ class VSSMAEnv(VSSBaseEnv):
                           w_energy * energy_penalty + \
                           w_speed * speed_penalty
 
-                    if speed_penalty < 0:
-                        dead_robot_count += 1
-
                     reward[f'robot_{idx}'] = rew
-                    self.individual_reward[f'robot_{idx}']['move'] = w_move * move_reward  # noqa
-                    self.individual_reward[f'robot_{idx}']['energy'] = w_energy * energy_penalty  # noqa
-                    self.individual_reward[f'robot_{idx}']['speed'] = w_speed * speed_penalty  # noqa
+                    self.individual_reward[f'blue_robot_{idx}']['move'] = w_move * move_reward  # noqa
+                    self.individual_reward[f'blue_robot_{idx}']['energy'] = w_energy * energy_penalty  # noqa
+                    self.individual_reward[f'blue_robot_{idx}']['speed'] = w_speed * speed_penalty  # noqa
         return reward, done
 
     def write_log(self, writer, step_num):
@@ -400,12 +397,19 @@ class VSSMAEnv(VSSBaseEnv):
         if self.writer is None:
             self.writer = writer
         self.writer.add_scalar(f'Ball Grad Reward', self.info['ball_grad'], global_step=step_num)
+        self.writer.add_scalar(f'Opp Ball Grad Reward', self.info['opp_ball_grad'], global_step=step_num)
         for idx in range(self.n_robots_control):
-            self.writer.add_scalar(f'Agent_{idx} Move Reward', self.individual_reward[f'robot_{idx}']['move'],
+            self.writer.add_scalar(f'Blue Agent_{idx} Move Reward', self.individual_reward[f'blue_robot_{idx}']['move'],
                                    global_step=step_num)
-            self.writer.add_scalar(f'Agent_{idx} Energy Penalty', self.individual_reward[f'robot_{idx}']['energy'],
+            self.writer.add_scalar(f'Blue Agent_{idx} Energy Penalty', self.individual_reward[f'blue_robot_{idx}']['energy'],
                                    global_step=step_num)
-            self.writer.add_scalar(f'Agent_{idx} Speed Penalty', self.individual_reward[f'robot_{idx}']['speed'],
+            self.writer.add_scalar(f'Blue Agent_{idx} Speed Penalty', self.individual_reward[f'blue_robot_{idx}']['speed'],
+                                   global_step=step_num)
+            self.writer.add_scalar(f'Yellow Agent_{idx} Move Reward', self.individual_reward[f'yellow_robot_{idx}']['move'],
+                                   global_step=step_num)
+            self.writer.add_scalar(f'Yellow Agent_{idx} Energy Penalty', self.individual_reward[f'yellow_robot_{idx}']['energy'],
+                                   global_step=step_num)
+            self.writer.add_scalar(f'Yellow Agent_{idx} Speed Penalty', self.individual_reward[f'yellow_robot_{idx}']['speed'],
                                    global_step=step_num)
 
     def _get_closet_robot_idx(self, target, team, except_idx=None):
@@ -873,13 +877,15 @@ class VSSMAAdv(VSSMAEnv):
         self.opps = []
         self.opp_obs = None
         self.opp_action = None
+        self.noise = 0
     def reset(self):
         obs = super().reset()
         self._opp_obs()
         return obs
 
-    def set_opp(self, agents):
+    def set_opp(self, agents,noise):
         self.opps = agents
+        self.noise = noise
 
     def step(self, action):
         observation, reward, done, _ = super().step(action)
@@ -952,7 +958,7 @@ class VSSMAAdv(VSSMAEnv):
         opp_actions = []
         for i in range(self.n_robots_yellow):
             if len(self.opps) != 0:
-                a = self.opps[i].choose_action(self.opp_obs[i], noise_std=0)
+                a = self.opps[i].choose_action(self.opp_obs[i], noise_std=self.noise)
                 opp_action = copy.deepcopy(a)
             else:
                 opp_action = self.ou_actions[self.n_robots_blue + i].sample()[i]
@@ -986,6 +992,8 @@ class VSSMAAdv(VSSMAEnv):
                 grad_ball_potential, closest_move, move_reward, energy_penalty, speed_penalty = 0, 0, 0, 0, 0
                 # Calculate ball potential
                 grad_ball_potential = -self._ball_grad()
+                self.info['opp_ball_grad'] = w_ball_grad * grad_ball_potential  # noqa
+
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
                     if w_move != 0:
@@ -1012,6 +1020,10 @@ class VSSMAAdv(VSSMAEnv):
                           w_speed * speed_penalty
 
                     reward[f'robot_{idx}'] = rew
+                    self.individual_reward[f'yellow_robot_{idx}']['move'] = w_move * move_reward  # noqa
+                    self.individual_reward[f'yellow_robot_{idx}']['energy'] = w_energy * energy_penalty  # noqa
+                    self.individual_reward[f'yellow_robot_{idx}']['speed'] = w_speed * speed_penalty  # noqa
+
         return reward
 
 
