@@ -8,7 +8,7 @@ import gym
 import numpy as np
 import torch
 
-from coach_mmoe import Coach_MMOE
+from coach_mmoe import Coach_MMOE, Ramdom_Coach
 from matd3 import MATD3
 from rsoccer_gym.Entities import Frame, Robot, Ball
 from rsoccer_gym.Utils import KDTree
@@ -104,7 +104,7 @@ class VSSMAEnv(VSSBaseEnv):
 
         # -------------------------------------Evaluation------------------------------------------------------------
         self.possession = [-1, -1]
-
+        self.fixed_initial_position = False
         print('Environment initialized')
 
     def reset(self):
@@ -473,6 +473,17 @@ class VSSMAEnv(VSSBaseEnv):
             places.insert(pos)
             pos_frame.robots_yellow[i] = Robot(x=pos[0], y=pos[1], theta=theta())
 
+        if self.fixed_initial_position == True:
+            pos_frame.ball = Ball(x=0, y=0)
+
+            pos_frame.robots_blue[0] = Robot(x=-0.375, y=0.4, theta=0)
+            pos_frame.robots_blue[1] = Robot(x=-0.375, y=0, theta=0)
+            pos_frame.robots_blue[2] = Robot(x=-0.375, y=-0.4, theta=0)
+
+            pos_frame.robots_yellow[0] = Robot(x=0.375, y=0.4, theta=180)
+            pos_frame.robots_yellow[1] = Robot(x=0.375, y=0, theta=180)
+            pos_frame.robots_yellow[2] = Robot(x=0.375, y=-0.4, theta=180)
+
         return pos_frame
 
     def _actions_to_v_wheels(self, actions):
@@ -761,6 +772,7 @@ class VSSMASelfplay(VSSMAOpp):
 
     def __init__(self, n_robots_control=3):
         super().__init__(n_robots_control=n_robots_control)
+        self.opp_type = 0
         self.opp_coach = None
         self.opp_path = "/home/user/football/HRL/models/selfplay_opponent/"
         self.opp_goal = [[0, 0], [0, 0]]
@@ -784,8 +796,12 @@ class VSSMASelfplay(VSSMAOpp):
         except FileNotFoundError:
             print("No opponent model found. Will use random opponent.")
         coach_path = f"{self.opp_path}coach"
-        self.opp_coach = Coach_MMOE(self.args, self.writer)
-        self.opp_coach.load_model(coach_path)
+        if self.opp_type == 1:
+            self.opp_coach = Coach_MMOE(self.args, self.writer)
+            self.opp_coach.load_model(coach_path)
+        else:
+            self.opp_coach = Ramdom_Coach()
+
 
     def _opp_obs(self):
         observation = []
@@ -991,9 +1007,8 @@ class VSSMAAdv(VSSMAEnv):
             if self.last_frame is not None:
                 grad_ball_potential, closest_move, move_reward, energy_penalty, speed_penalty = 0, 0, 0, 0, 0
                 # Calculate ball potential
-                grad_ball_potential = -self._ball_grad()
-                self.info['opp_ball_grad'] = w_ball_grad * grad_ball_potential  # noqa
-
+                weighted_grad_ball_potential = -self.info['ball_grad']
+                self.info['opp_ball_grad'] = -weighted_grad_ball_potential
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
                     if w_move != 0:
@@ -1014,7 +1029,7 @@ class VSSMAAdv(VSSMAEnv):
                         if speed_abs <= speed_dead_zone:
                             speed_penalty = -1
 
-                    rew = w_ball_grad * grad_ball_potential + \
+                    rew = weighted_grad_ball_potential + \
                           w_move * move_reward + \
                           w_energy * energy_penalty + \
                           w_speed * speed_penalty

@@ -32,8 +32,8 @@ class Coach_MMOE(object):
 
         top_2_x_pos = -0.75 + 1.5 / 6 / 2 + top_2_x * 1.5 / 6
         top_2_y_pos = -0.65 + 1.3 / 6 / 2 + top_2_y * 1.3 / 6
-        # print(f"top1:{top_1}=[{top_1_x},{top_1_y}]=[{top_1_x_pos},{top_1_y_pos}]")
-        # print(f"top2:{top_2}=[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
+        print(f"top1:{top_1}=[{top_1_x},{top_1_y}]=[{top_1_x_pos},{top_1_y_pos}]")
+        print(f"top2:{top_2}=[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
         return np.array([[top_1_x_pos, top_1_y_pos], [top_2_x_pos, top_2_y_pos]])
 
     def train(self, replay_buffer: CoachReplayBuffer, step):
@@ -67,6 +67,27 @@ class Coach_MMOE(object):
             torch.save(self.mmoe_net.state_dict(), f"{save_path}coach")
         else:
             torch.save(self.mmoe_net.state_dict(), f"{save_path}moe_num_{number}_{int(total_steps / 1000)}k")
+
+class Ramdom_Coach():
+    def __init__(self):
+        return
+    def choose_action(self, obs):
+        top_1_x =  np.random.randint(6)
+        top_1_y =  np.random.randint(6)
+        top_2_x =  np.random.randint(6)
+        top_2_y =  np.random.randint(6)
+        while(top_1_x == top_2_x and top_1_y == top_2_y):
+            top_2_x = np.random.randint(6)
+            top_2_y = np.random.randint(6)
+
+        top_1_x_pos = -0.75 + 1.5 / 6 / 2 + top_1_x * 1.5 / 6
+        top_1_y_pos = -0.65 + 1.3 / 6 / 2 + top_1_y * 1.3 / 6
+
+        top_2_x_pos = -0.75 + 1.5 / 6 / 2 + top_2_x * 1.5 / 6
+        top_2_y_pos = -0.65 + 1.3 / 6 / 2 + top_2_y * 1.3 / 6
+        print(f"ramdom top1:[{top_1_x},{top_1_y}]=[{top_1_x_pos},{top_1_y_pos}]")
+        print(f"random top2:[{top_2_x},{top_2_y}]=[{top_2_x_pos},{top_2_y_pos}]")
+        return np.array([[top_1_x_pos, top_1_y_pos], [top_2_x_pos, top_2_y_pos]])
 
 if __name__ == '__main__':
     # a = [0.3949057, -0.67849123, 0.49404806, -0.8383228, -0.6695515, -0.5077701,

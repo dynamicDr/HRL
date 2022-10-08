@@ -211,7 +211,7 @@ if __name__ == '__main__':
 
     env_name = "VSSMAAdv-v0"
     seed = 0
-    number = 21
+    number = 23
 
     runner = Runner(args, env_name=env_name, number=number, seed=seed)
 
