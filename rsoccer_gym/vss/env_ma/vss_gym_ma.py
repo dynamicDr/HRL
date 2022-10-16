@@ -397,7 +397,8 @@ class VSSMAEnv(VSSBaseEnv):
         if self.writer is None:
             self.writer = writer
         self.writer.add_scalar(f'Ball Grad Reward', self.info['ball_grad'], global_step=step_num)
-        self.writer.add_scalar(f'Opp Ball Grad Reward', self.info['opp_ball_grad'], global_step=step_num)
+
+        # self.writer.add_scalar(f'Opp Ball Grad Reward', self.info['opp_ball_grad'], global_step=step_num)
         for idx in range(self.n_robots_control):
             self.writer.add_scalar(f'Blue Agent_{idx} Move Reward', self.individual_reward[f'blue_robot_{idx}']['move'],
                                    global_step=step_num)
@@ -1008,7 +1009,7 @@ class VSSMAAdv(VSSMAEnv):
                 grad_ball_potential, closest_move, move_reward, energy_penalty, speed_penalty = 0, 0, 0, 0, 0
                 # Calculate ball potential
                 weighted_grad_ball_potential = -self.info['ball_grad']
-                self.info['opp_ball_grad'] = -weighted_grad_ball_potential
+                self.info['opp_ball_grad'] = weighted_grad_ball_potential
                 for idx in range(self.n_robots_control):
                     # Calculate Move reward
                     if w_move != 0:

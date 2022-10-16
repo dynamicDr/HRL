@@ -1,0 +1,23 @@
+=============end2end performance==============
+HRL vs random:
+    MAIN.py
+    /home/user/football/HRL/models/agent/actor_number_19_10016k_agent_0.pth
+MATD3 vs ramdom:
+    MAIN.py in matd3 project
+    /home/user/football/HRL/models/opponent/matd3_9978k/MATD3_actor_number_2_step_9978k_agent_0.pth
+HRL vs MATD3 adv training:
+    adv_train.py
+    /home/user/football/HRL/models/matd3_adv/actor_number_23_2182k_agent_0.pth
+    /home/user/football/HRL/models/agent/actor_number_23_2182k_agent_0.pth
+==============fast convergence================
+HRL vs MADDPG and MATD3 vs MADDPG:
+    convergenve_train.py
+
+
+=====================ablation=================
+NN-HRL vs HRL (only train nn coach):
+    nn_train.py
+    /home/user/football/HRL/models/opponent/maddpg/MADDPG_actor_number_4_step_5401k_agent_{}.pth
+    football_match_HVH
+Ramdom Coach vs HRL (only train nn coach):
+    football_match_HVH

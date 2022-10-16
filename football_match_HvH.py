@@ -105,6 +105,8 @@ for match in range(max_match):
     match_goal_count = 0
     top_1_acc = 0
     top_2_acc = 0
+    opp_top_1_acc = 0
+    opp_top_2_acc = 0
 
     match_dict = {}
     for name in df_column_names:
@@ -174,6 +176,7 @@ for match in range(max_match):
             if goal_step == args.goal_update_freq or (terminate or done):
                 match_goal_count += 1
                 acc_code = coach_accracy_log(goal, coach_obs)
+                acc_code = coach_accracy_log(env.opp_goal, env.opp_obs)
                 if acc_code == 0 :
                     top_1_acc+=1
                     top_2_acc+=1
